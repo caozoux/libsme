@@ -1,10 +1,15 @@
 
 TARGET :=
-SUBDIR := buffer
-
+SUBDIR := buffer notify
+#SUBDIR_CLEAN := buffer_clean notify_clean
+SUBDIR_CLEAN := $(patsubst %_clean,%,$(SUBDIR))
+.PHONY : $(SUBDIR) $(SUBDIR_CLEAN)
 ALL: $(SUBDIR)
-	@make -C $^
 
-clean: $(SUBDIR)
-	@make -C $^ clean
-	@rm *.o $(TARGET) -rf
+$(SUBDIR): 
+	$(Q)$*(MAKE) -C $@
+
+clean: $(SUBDIR_CLEAN) 
+
+$(SUBDIR_CLEAN):
+	$(Q)$(MAKE) -C $(subst _clean,,$@) clean

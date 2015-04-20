@@ -4,35 +4,32 @@ AR:=$(CROSS)ar
 LD:=$(CROSS)ld
 STRIP:=$(CROSS)strip
 
+HOST_OS := linux
+MAKE := @make
+RM := @rm
+ifneq ($(DBG),)
+	MAKE = make
+endif
+
+MAKE :=make
+Q :=@
 MAKEARGS := CC=$(CROSS)g++ AR=$(CROSS)ar LD=$(CROSS)ld
 TARGET = libsme.so
 INCLUDE += -I.
-#INCLUDE += -I my_lib
-#INCLUDE += -I av_chip
-#INCLUDE += -I ipcam_proxy
 
 LDFLAGS += -lpthread
-#LDFLAGS += -lusb
-#LDFLAGS += -lhd
-#LDFLAGS += -lcore
-#LDFLAGS += -lutility
+CFLAGS += -fPIC
 
 OBJECTS += $(patsubst %.cpp, %.o, $(wildcard *.cpp))
-#OBJECTS += $(patsubst %.cpp, %.o, $(wildcard my_lib/*.cpp))
-#OBJECTS += $(patsubst %.cpp, %.o, $(wildcard av_chip/*.cpp))
 #OBJECTS += $(patsubst %.cpp, %.o, $(wildcard ipcam_proxy/*.cpp))
+export MAKE CC AR LD STRIP HOST_OS RM INCLUDE LDFLAGS CFLAGS Q
 
 SUBDIR = module
-#%.o:%.cpp
-#	$(CC) $(CFLAGS) $(DFLAGS) $(INCLUDE) -c $^ -o $@
 
-#$(TARGET):  $(OBJECTS)
-#	$(CC) $(INCLUDE) -o $@ -shared -fPIC $(CFLAGS) $(LDFLAGS) $^ $(LIBS)
-#	$(CROSS)strip $(TARGET)
 $(TARGET): $(SUBDIR) 
-	@make $(MAKEARGS) -C $^ 
+	$(Q)$(MAKE) $(MAKEARGS) -C $^
 
 clean: $(SUBDIR)
-	@make -C $^ clean
-	@rm *.o $(TARGET) -rf
+	$(Q)$(MAKE) -C $^ clean
+	$(Q)$(RM) *.o $(TARGET) -rf
 	
