@@ -10,7 +10,7 @@ $(TARGET):  $(OBJECTS)
 #$(CROSS)strip $(TARGET)
 
 test:
-	$(CC) -o $(TAR_TEST) input_read.c
+	g++ -o $(TAR_TEST) input_read.cpp
 
 clean:
 	@rm *.o $(TARGET) -rf
