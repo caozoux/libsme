@@ -3,6 +3,10 @@
 #include <stdlib.h>
 #include <fcntl.h>  
 #include <linux/input.h> 
+#include <unistd.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 /*
  inux/input.h中有定义，这个文件还定义了标准按键的编码等
  struct input_event {
@@ -37,13 +41,7 @@ value：
 */ 
 
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <fcntl.h>  
-#include <linux/input.h> 
-
-#define EVENT_NAME ("/dev/input/event3")
+#define EVENT_NAME ("/dev/input/event2")
 int main(void)  
 {  
     struct input_event ev_temp;  
@@ -58,17 +56,20 @@ int main(void)
 	char up[] = "up";
 	char down[] = "down";
   
-    while(1) {  
+    while(1) {
         count = read(fd, &ev_temp, sizeof(struct input_event));
 		if(count)
 		{
-		if(ev_temp.type == EV_SYN)
-		continue;
+			if(ev_temp.type == EV_SYN)
+				continue;
 
-		printf("key:%d ", ev_temp.code);
-		printf("%s\n", ev_temp.value?down:up);
-		continue;
+			printf("key:%d ", ev_temp.code);
+			printf("%s\n", ev_temp.value?down:up);
+			continue;
 		}
-    }  
+    }
     return 0;  
 }
+#ifdef __cplusplus
+}
+#endif

@@ -1,0 +1,117 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+D	in_event.c	61;"	d	file:
+D	in_event.c	82;"	d	file:
+DEBUG	in_event.c	41;"	d	file:
+DEFAULT_PORT	input_server.cpp	9;"	d	file:
+EVENT_NAME	input_read.cpp	44;"	d	file:
+FATAL	in_event.c	58;"	d	file:
+FDE_ACTIVE	in_event.c	89;"	d	file:
+FDE_CREATED	in_event.c	91;"	d	file:
+FDE_EVENTMASK	in_event.c	86;"	d	file:
+FDE_PENDING	in_event.c	90;"	d	file:
+FDE_STATEMASK	in_event.c	87;"	d	file:
+INSOCK_DATA_LIST_MAX	input_server.cpp	11;"	d	file:
+MAXLINE	input_server.cpp	10;"	d	file:
+MEKey_data	keys.h	/^struct MEKey_data {$/;"	s
+MEKey_data::keycode	keys.h	/^int keycode;$/;"	m	struct:MEKey_data	access:public
+MEKey_data::name	keys.h	/^char *name[4];$/;"	m	struct:MEKey_data	access:public
+SAFE_SPRINTF	in_event.c	335;"	d	file:
+SHELL_EXIT_NOTIFY_FD	in_event.c	/^int SHELL_EXIT_NOTIFY_FD = -1;$/;"	v
+TARGET	Makefile	/^TARGET := input.a$/;"	m
+TAR_TEST	Makefile	/^TAR_TEST :=in_test$/;"	m
+_IN_MSG_H_	in_msg.h	2;"	d
+__IN_EVENT__	in_event.h	2;"	d
+__MEKEYS_H__	keys.h	2;"	d
+arg	in_event.h	/^    void *arg;$/;"	m	struct:fdevent	access:public
+create_insock_data	input_server.cpp	/^struct insock_data * create_insock_data()$/;"	f	signature:()
+dump_all_fds	in_event.c	/^static inline void dump_all_fds(const char *extra_msg) {}$/;"	f	file:	signature:(const char *extra_msg)
+dump_all_fds	in_event.c	/^static void dump_all_fds(const char *extra_msg)$/;"	f	file:	signature:(const char *extra_msg)
+dump_fde	in_event.c	/^static void dump_fde(fdevent *fde, const char *info)$/;"	f	file:	signature:(fdevent *fde, const char *info)
+dump_fde	in_event.c	83;"	d	file:
+epoll_fd	in_event.c	/^static int epoll_fd = -1;$/;"	v	file:
+error_fds	in_event.c	/^static fd_set error_fds;$/;"	v	file:
+events	in_event.h	/^    unsigned short events;$/;"	m	struct:fdevent	access:public
+fatal	in_event.c	/^static void fatal(const char *fn, const char *fmt, ...)$/;"	f	file:	signature:(const char *fn, const char *fmt, ...)
+fd	in_event.h	/^    int fd; $/;"	m	struct:fdevent	access:public
+fd_func	in_event.h	/^typedef void (*fd_func)(int fd, unsigned events, void *userdata);$/;"	t
+fd_table	in_event.c	/^static fdevent **fd_table = 0;$/;"	v	file:
+fd_table_max	in_event.c	/^static int fd_table_max = 0;$/;"	v	file:
+fdevent	in_event.h	/^struct fdevent $/;"	s
+fdevent::arg	in_event.h	/^    void *arg;$/;"	m	struct:fdevent	access:public
+fdevent::events	in_event.h	/^    unsigned short events;$/;"	m	struct:fdevent	access:public
+fdevent::fd	in_event.h	/^    int fd; $/;"	m	struct:fdevent	access:public
+fdevent::force_eof	in_event.h	/^    int force_eof;$/;"	m	struct:fdevent	access:public
+fdevent::func	in_event.h	/^    fd_func func;$/;"	m	struct:fdevent	access:public
+fdevent::next	in_event.h	/^    fdevent *next;$/;"	m	struct:fdevent	access:public
+fdevent::prev	in_event.h	/^    fdevent *prev;$/;"	m	struct:fdevent	access:public
+fdevent::state	in_event.h	/^    unsigned short state;$/;"	m	struct:fdevent	access:public
+fdevent_add	in_event.c	/^void fdevent_add(fdevent *fde, unsigned events)$/;"	f	signature:(fdevent *fde, unsigned events)
+fdevent_add	in_event.h	/^void fdevent_add(fdevent *fde, unsigned events);$/;"	p	signature:(fdevent *fde, unsigned events)
+fdevent_call_fdfunc	in_event.c	/^static void fdevent_call_fdfunc(fdevent* fde)$/;"	f	file:	signature:(fdevent* fde)
+fdevent_connect	in_event.c	/^static void fdevent_connect(fdevent *fde)$/;"	f	file:	signature:(fdevent *fde)
+fdevent_create	in_event.c	/^fdevent *fdevent_create(int fd, fd_func func, void *arg)$/;"	f	signature:(int fd, fd_func func, void *arg)
+fdevent_create	in_event.h	/^fdevent *fdevent_create(int fd, fd_func func, void *arg);$/;"	p	signature:(int fd, fd_func func, void *arg)
+fdevent_del	in_event.c	/^void fdevent_del(fdevent *fde, unsigned events)$/;"	f	signature:(fdevent *fde, unsigned events)
+fdevent_del	in_event.h	/^void fdevent_del(fdevent *fde, unsigned events);$/;"	p	signature:(fdevent *fde, unsigned events)
+fdevent_destroy	in_event.c	/^void fdevent_destroy(fdevent *fde)$/;"	f	signature:(fdevent *fde)
+fdevent_destroy	in_event.h	/^void fdevent_destroy(fdevent *fde);$/;"	p	signature:(fdevent *fde)
+fdevent_disconnect	in_event.c	/^static void fdevent_disconnect(fdevent *fde)$/;"	f	file:	signature:(fdevent *fde)
+fdevent_fd_check	in_event.c	/^static int fdevent_fd_check(fd_set *fds)$/;"	f	file:	signature:(fd_set *fds)
+fdevent_init	in_event.c	/^static void fdevent_init()$/;"	f	file:
+fdevent_init	in_event.c	/^static void fdevent_init(void)$/;"	f	file:	signature:(void)
+fdevent_install	in_event.c	/^void fdevent_install(fdevent *fde, int fd, fd_func func, void *arg)$/;"	f	signature:(fdevent *fde, int fd, fd_func func, void *arg)
+fdevent_install	in_event.h	/^void fdevent_install(fdevent *fde, int fd, fd_func func, void *arg);$/;"	p	signature:(fdevent *fde, int fd, fd_func func, void *arg)
+fdevent_loop	in_event.c	/^void fdevent_loop()$/;"	f
+fdevent_loop	in_event.h	/^void fdevent_loop();$/;"	p	signature:()
+fdevent_plist_dequeue	in_event.c	/^static fdevent *fdevent_plist_dequeue(void)$/;"	f	file:	signature:(void)
+fdevent_plist_dequeue	in_event.c	/^static fdevent *fdevent_plist_dequeue(void);$/;"	p	file:	signature:(void)
+fdevent_plist_enqueue	in_event.c	/^static void fdevent_plist_enqueue(fdevent *node)$/;"	f	file:	signature:(fdevent *node)
+fdevent_plist_enqueue	in_event.c	/^static void fdevent_plist_enqueue(fdevent *node);$/;"	p	file:	signature:(fdevent *node)
+fdevent_plist_remove	in_event.c	/^static void fdevent_plist_remove(fdevent *node)$/;"	f	file:	signature:(fdevent *node)
+fdevent_plist_remove	in_event.c	/^static void fdevent_plist_remove(fdevent *node);$/;"	p	file:	signature:(fdevent *node)
+fdevent_process	in_event.c	/^static void fdevent_process()$/;"	f	file:
+fdevent_register	in_event.c	/^static void fdevent_register(fdevent *fde)$/;"	f	file:	signature:(fdevent *fde)
+fdevent_remove	in_event.c	/^void fdevent_remove(fdevent *fde)$/;"	f	signature:(fdevent *fde)
+fdevent_remove	in_event.h	/^void fdevent_remove(fdevent *item);$/;"	p	signature:(fdevent *item)
+fdevent_set	in_event.c	/^void fdevent_set(fdevent *fde, unsigned events)$/;"	f	signature:(fdevent *fde, unsigned events)
+fdevent_set	in_event.h	/^void fdevent_set(fdevent *fde, unsigned events);$/;"	p	signature:(fdevent *fde, unsigned events)
+fdevent_set_timeout	in_event.h	/^void fdevent_set_timeout(fdevent *fde, int64_t  timeout_ms);$/;"	p	signature:(fdevent *fde, int64_t timeout_ms)
+fdevent_subproc_event_func	in_event.c	/^static void fdevent_subproc_event_func(int fd, unsigned ev, void *userdata)$/;"	f	file:	signature:(int fd, unsigned ev, void *userdata)
+fdevent_subproc_event_func	in_event.c	/^static void fdevent_subproc_event_func(int fd, unsigned events, void *userdata);$/;"	p	file:	signature:(int fd, unsigned events, void *userdata)
+fdevent_subproc_setup	in_event.c	/^void fdevent_subproc_setup()$/;"	f
+fdevent_unregister	in_event.c	/^static void fdevent_unregister(fdevent *fde)$/;"	f	file:	signature:(fdevent *fde)
+fdevent_update	in_event.c	/^static void fdevent_update(fdevent *fde, unsigned events)$/;"	f	file:	signature:(fdevent *fde, unsigned events)
+flag	in_msg.h	/^    unsigned short flag;$/;"	m	struct:insock_data	access:public
+force_eof	in_event.h	/^    int force_eof;$/;"	m	struct:fdevent	access:public
+func	in_event.h	/^    fd_func func;$/;"	m	struct:fdevent	access:public
+insock_data	in_msg.h	/^struct insock_data$/;"	s
+insock_data::flag	in_msg.h	/^    unsigned short flag;$/;"	m	struct:insock_data	access:public
+insock_data::key	in_msg.h	/^    unsigned short key;$/;"	m	struct:insock_data	access:public
+insock_data::next	in_msg.h	/^	struct insock_data *next;$/;"	m	struct:insock_data	typeref:struct:insock_data::insock_data	access:public
+insock_data::prv	in_msg.h	/^	struct insock_data *prv;$/;"	m	struct:insock_data	typeref:struct:insock_data::insock_data	access:public
+insock_data::time	in_msg.h	/^    int time;$/;"	m	struct:insock_data	access:public
+insock_data_exit	input_server.cpp	/^void insock_data_exit(void)$/;"	f	signature:(void)
+insock_data_free	input_server.cpp	/^void insock_data_free(struct insock_data *data)$/;"	f	signature:(struct insock_data *data)
+insock_data_init	input_server.cpp	/^bool insock_data_init(void)$/;"	f	signature:(void)
+insock_data_list	input_server.cpp	/^struct insock_data *insock_data_list;$/;"	v	typeref:struct:insock_data
+key	in_msg.h	/^    unsigned short key;$/;"	m	struct:insock_data	access:public
+keycode	keys.h	/^int keycode;$/;"	m	struct:MEKey_data	access:public
+list_pending	in_event.c	/^static fdevent list_pending = {$/;"	v	file:
+main	input_read.cpp	/^int main(void)  $/;"	f	signature:(void)
+name	keys.h	/^char *name[4];$/;"	m	struct:MEKey_data	access:public
+next	in_event.h	/^    fdevent *next;$/;"	m	struct:fdevent	access:public
+next	in_msg.h	/^	struct insock_data *next;$/;"	m	struct:insock_data	typeref:struct:insock_data::insock_data	access:public
+prev	in_event.h	/^    fdevent *prev;$/;"	m	struct:fdevent	access:public
+prv	in_msg.h	/^	struct insock_data *prv;$/;"	m	struct:insock_data	typeref:struct:insock_data::insock_data	access:public
+read_fds	in_event.c	/^static fd_set read_fds;$/;"	v	file:
+select_n	in_event.c	/^static int select_n = 0;$/;"	v	file:
+server_create	input_server.cpp	/^int server_create(void)$/;"	f	signature:(void)
+state	in_event.h	/^    unsigned short state;$/;"	m	struct:fdevent	access:public
+time	in_msg.h	/^    int time;$/;"	m	struct:insock_data	access:public
+ubuntu_key	keys.h	/^struct MEKey_data ubuntu_key = $/;"	v	typeref:struct:MEKey_data
+write_fds	in_event.c	/^static fd_set write_fds;$/;"	v	file:
