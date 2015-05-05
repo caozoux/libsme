@@ -190,14 +190,15 @@ static ssize_t pcm_write(u_char *data, size_t count)
 {
 	ssize_t r;
 	ssize_t result = 0;
-	 printf("%p count:%d\n", data, count);
 
 	if (count < chunk_size) {
 		snd_pcm_format_set_silence(hwparams.format, data + count * bits_per_frame / 8, (chunk_size - count) * hwparams.channels);
 		count = chunk_size;
 	}
+
+	printf("%s buf:%p size:%d\n", __func__, data, count);
 	while (count > 0 && !in_aborting) {
-	//	r = writei_func(handle, data, count);
+		//r = writei_func(handle, data, count);
 		r = snd_pcm_writei(handle, data, count);
 		if (r == -EAGAIN || (r >= 0 && (size_t)r < count)) {
 				snd_pcm_wait(handle, 100);
@@ -209,6 +210,7 @@ static ssize_t pcm_write(u_char *data, size_t count)
 			error(_("write error: %s"), snd_strerror(r));
 			prg_exit(EXIT_FAILURE);
 		}
+
 		if (r > 0) {
 			//if (vumeter)
 			//		compute_max_peak(data, r * hwparams.channels);
@@ -293,6 +295,7 @@ static void set_params(void)
 				plugex);
 		}
 	}
+
 	rate = hwparams.rate;
 	if (buffer_time == 0 && buffer_frames == 0) {
 		err = snd_pcm_hw_params_get_buffer_time_max(params,
@@ -307,6 +310,7 @@ static void set_params(void)
 		else
 			period_frames = buffer_frames / 4;
 	}
+
 	if (period_time > 0)
 		err = snd_pcm_hw_params_set_period_time_near(handle, params,
 							     &period_time, 0);
@@ -383,28 +387,12 @@ static void set_params(void)
 		error(_("not enough memory"));
 		prg_exit(EXIT_FAILURE);
 	}
-	// fprintf(stderr, "real chunk_size = %i, frags = %i, total = %i\n", chunk_size, setup.buf.block.frags, setup.buf.block.frags * chunk_size);
+	fprintf(stderr, "real chunk_size = %i\n", chunk_size); 
 
 	/* stereo VU-meter isn't always available... */
 	if (vumeter == VUMETER_STEREO) {
 		if (hwparams.channels != 2 || !interleaved || verbose > 2)
 			vumeter = VUMETER_MONO;
-	}
-
-	/* show mmap buffer arragment */
-	if (mmap_flag && verbose) {
-		const snd_pcm_channel_area_t *areas;
-		snd_pcm_uframes_t offset, size = chunk_size;
-		int i;
-		err = snd_pcm_mmap_begin(handle, &areas, &offset, &size);
-		if (err < 0) {
-			error(_("snd_pcm_mmap_begin problem: %s"), snd_strerror(err));
-			prg_exit(EXIT_FAILURE);
-		}
-		for (i = 0; i < hwparams.channels; i++)
-			fprintf(stderr, "mmap_area[%i] = %p,%u,%u (%u)\n", i, areas[i].addr, areas[i].first, areas[i].step, snd_pcm_format_physical_width(hwparams.format));
-		/* not required, but for sure */
-		snd_pcm_mmap_commit(handle, offset, 0);
 	}
 
 	buffer_frames = buffer_size;	/* for position test */
@@ -425,7 +413,7 @@ void playback_go(int fd, size_t loaded, long  long count, int rtype, u_char *aud
             return;
         written += chunk_bytes;
         loaded -= chunk_bytes;
-    }    
+    }
     if (written > 0 && loaded > 0) 
         memmove(audiobuf, audiobuf + written, loaded);
 
@@ -456,7 +444,7 @@ void playback_go(int fd, size_t loaded, long  long count, int rtype, u_char *aud
         r = r * bits_per_frame / 8; 
         written += r;
         l = 0; 
-    }    
+    }
     snd_pcm_nonblock(handle, 0);
     snd_pcm_drain(handle);
 	snd_pcm_nonblock(handle, nonblock);

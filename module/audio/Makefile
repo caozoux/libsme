@@ -3,7 +3,7 @@ TAR_TEST := audio_test
 OBJECTS_TEST = test/audio_test.o
 CFLAGS := -g -o2
 LDFLAGS +=-lasound 
-INCLUDE += -I.
+INCLUDE += -I. -I../include/
 
 OBJECTS += $(patsubst %.c, %.o, $(wildcard *.c))
 %.o:%.c
