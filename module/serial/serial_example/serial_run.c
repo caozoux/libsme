@@ -111,14 +111,16 @@ void tty_write_thread_handle(void *data)
 {
 	int ret, msgid;
 	struct msgstru msgs;
-	while (1) {
-		msgid = msgget(MSGKEY,IPC_EXCL );/*检查消息队列是否存在 */
-		if(msgid < 0){  
-			while (1) {
-				printf("msg %d no find\n",MSGKEY);
-				sleep(1);
-			}
+
+	msgid = msgget(MSGKEY,IPC_EXCL);/*检查消息队列是否存在 */
+	if (msgid < 0) {
+		while (1) {
+			printf("msg %d no find\n",MSGKEY);
+			sleep(1);
 		}
+	}
+
+	while (1) {
 		ret = msgrcv(msgid,&msgs,sizeof(struct msgstru),0,0);
 		switch (msgs.msgtype) {
 			case MSG_U_BOOT_CMD:
@@ -142,7 +144,8 @@ void tty_write_thread_handle(void *data)
 				break;
 			case MSG_REBOOT:
 				{
-					char cmd[]="reroot\n";
+					char cmd[]="reboot\n";
+					printf("excule reboot\n");
 					ret = write(serial_fd, cmd, strlen(cmd));
 					sleep(1);
 				}
