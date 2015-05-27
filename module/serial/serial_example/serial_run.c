@@ -11,8 +11,19 @@
 //#define DEVNAME "/dev/ttyUSB0"
 #define DEVNAME "/dev/ttyS0"
 
+//tty fd id
 int serial_fd;
+//pipe fd id
 int pipe_fd;
+// hook_mode 是否处理了串口的内容
+int hook_mode = 0;
+
+#define READ_BUFFER_SIZE 256 
+static char read_buffer[READ_BUFFER_SIZE+128] = { 0 };
+static int read_start = 0,read_end = 0;
+static pthread_rwlock_t rwlock;
+pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 /* init the tty ttyS0, 115200, 8,1*/
 int serial_init(void)
@@ -87,18 +98,37 @@ int serial_init(void)
 }
 
 int tty_context_handle(char *buf) {
+	int ret;
 	int len = strlen(buf);
 	int i = 0;
+	char ch[2]="\r\n";
+	int retry = 5;
 	if (len == 0)
 		return 0;
 
-	for (i =0;i <len; i++) {
-		if (buf[i] == '\n') {
-			printf("find change line\n");
-			if (strstr("Hit any key to stop autoboot:", buf)) {
-				printf("find :Hit any key to stop autoboot:\n");
-				return 1;
+	//if (strstr(buf, "Hit any key to stop autoboot:")) {
+	if (hook_mode) {
+		if (strstr(buf, "DRAM:")) {
+			while(retry--) {
+				ret = write(serial_fd,ch,2);
+				if (ret <= 0) {
+					printf("entry write error\n");
+				}
 			}
+			return 1;
+		} else if (strstr(buf, "U-Boot#")) {
+			char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;set netargs setenv bootargs console=ttyO0,115200n8 root=/dev/nfs nfsroot=128.224.162.212:/var/lib/tftpboot/dist,nolock rw ip=dhcp ;tftp 0x80200000  /dist/boot/zImage_wr7dbg;tftp    0x80f80000 /boot_TISDK8/dtb_ti-linux-kernel3.14.y;setenv autoload no;run netargs; bootz 0x80200000 - 0x80f80000";
+			ret = write(serial_fd, bootcmd, strlen(bootcmd));
+			if (ret <= 0) {
+				printf("command write error:%d\n", ret);
+			}
+			//while(retry--) {
+				ret = write(serial_fd,ch,2);
+				if (ret <= 0) {
+					printf("entry write error\n");
+				}
+			//}
+			hook_mode = 0;
 		}
 	}
 	return 0;
@@ -189,32 +219,9 @@ void charbuff_dump(char *buf, int len)
 	printf("\n");
 }
 
-#define READ_BUFFER_SIZE 128
-static char read_buffer[READ_BUFFER_SIZE+128] = { 0 };
-static int read_start = 0,read_end = 0;
-static pthread_rwlock_t rwlock;
 //printf handle
 void printf_thread_handle(void* data)
 {
-#if 0
-	while(1) {
-		int i = 0;
-		char line_buffer[READ_BUFFER_SIZE] = {0};
-		//printf("printf_thread_handle +\n");
-		pthread_rwlock_rdlock(&rwlock);
-		if (read_end > read_start) {
-			memcpy(line_buffer, read_buffer+read_start, read_end-read_start);
-			read_start = read_end;
-		}
-		if (read_end >= READ_BUFFER_SIZE) {
-			read_end = read_start = 0;
-		}
-		pthread_rwlock_unlock(&rwlock);
-		printf("%s", line_buffer);
-		usleep(1000);
-		//printf("printf_thread_handle -\n");
-	}
-#else
 	char line_buffer[READ_BUFFER_SIZE];
 	int line_s = 0;
 	int lines=0, old_lines=0;
@@ -228,7 +235,9 @@ void printf_thread_handle(void* data)
 		int pr_end = 0;
 		char pr_buffer[READ_BUFFER_SIZE] = {0};
 
-		usleep(1000);
+		pthread_mutex_lock(&mut);
+		pthread_cond_wait(&cond, &mut);
+		pthread_mutex_unlock(&mut);
 
 		pthread_rwlock_rdlock(&rwlock);
 		size = read_end - read_start;
@@ -261,10 +270,10 @@ void printf_thread_handle(void* data)
 				memcpy(line_buffer+line_s, pr_buffer+pr_end, i - pr_end + 1);
 				line_buffer[line_s+i-pr_end+1] = 0;
 				printf("%s", line_buffer);
+				if (hook_mode)
+					tty_context_handle(line_buffer);
 				line_s = 0;
 				pr_end = i+1;
-
-				
 			}
 		}
 
@@ -278,9 +287,8 @@ void printf_thread_handle(void* data)
 
 		old_lines = lines;
 	}
-#endif
-
 }
+
 int main(int argc, char * args[])
 {
 	if (serial_input_pipe_init()) {
@@ -288,6 +296,19 @@ int main(int argc, char * args[])
 	}
 
 	serial_init();
+
+	if (pthread_mutex_init(&mut, NULL) != 0)
+	{
+		printf("mutex init error\n");
+		return 1;
+	}
+
+	if (pthread_cond_init(&cond, NULL) != 0)
+	{
+		printf("cond init error\n");
+		return 1;
+	}
+
 	if (thread_init()) {
 		printf("err: init input \n");
 		close(serial_fd);
@@ -295,13 +316,17 @@ int main(int argc, char * args[])
 	}
 	pthread_rwlock_init(&rwlock, NULL);
 
+
 	while(1) {
 		int size;
-		size = read(serial_fd, read_buffer+read_end, READ_BUFFER_SIZE);
 		pthread_rwlock_wrlock(&rwlock);
+		size = read(serial_fd, read_buffer+read_end, READ_BUFFER_SIZE);
+		printf("read_end:%d read:%d\n", read_end, size);
 		if (size) {
 			read_end +=size;
-			//printf("read_start:%d read_end:%d\n", read_start, read_end);
+			pthread_mutex_lock(&mut);
+			pthread_cond_signal(&cond);
+			pthread_mutex_unlock(&mut);
 		}
 		pthread_rwlock_unlock(&rwlock);
 	}
