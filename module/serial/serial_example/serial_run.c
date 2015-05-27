@@ -5,18 +5,26 @@
 #include <errno.h>	/* Error number definitions */
 #include <termios.h>	/* POSIX terminal control definitions */
 #include <pthread.h>
+#include <sys/eventfd.h>
+#include <sys/epoll.h>
+#include <sys/msg.h> 
+#include <sys/ipc.h>
 
 
 #include "serialme.h"
 //#define DEVNAME "/dev/ttyUSB0"
 #define DEVNAME "/dev/ttyS0"
+//epoll event number
+#define NUM_EVENTS  128
 
 //tty fd id
 int serial_fd;
 //pipe fd id
 int pipe_fd;
 // hook_mode 是否处理了串口的内容
-int hook_mode = 0;
+int hook_mode = 1;
+int msqid;
+
 
 #define READ_BUFFER_SIZE 256 
 static char read_buffer[READ_BUFFER_SIZE+128] = { 0 };
@@ -25,13 +33,15 @@ static pthread_rwlock_t rwlock;
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
-/* init the tty ttyS0, 115200, 8,1*/
+/* it is flag value, should be set 0 after inputting boot cmd*/
+static int u_boot_cmd = 0;
+/*init the tty ttyS0, 115200, 8,1*/
 int serial_init(void)
 {
 	struct termios options;
 	int fd;
 
-	/* 以非阻塞方式打开串口 */
+	/*以非阻塞方式打开串口*/
 	fd = open(DEVNAME, O_RDWR | O_NOCTTY | O_NDELAY);
 	if (fd < 0) {
 		printf("Open the serial port error!\n");
@@ -83,7 +93,6 @@ int serial_init(void)
 	 */
 	options.c_oflag &= ~OPOST;
 
-
 	/*
 	 * Set read timeouts
 	 */
@@ -97,16 +106,63 @@ int serial_init(void)
 	return 0;
 }
 
+char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;set netargs setenv bootargs console=ttyO0,115200n8 root=/dev/nfs nfsroot=128.224.162.212:/var/lib/tftpboot/dist,nolock rw ip=dhcp ;tftp 0x80200000  /dist/boot/zImage_wr7dbg;tftp    0x80f80000 /boot_TISDK8/dtb_ti-linux-kernel3.14.y;setenv autoload no;run netargs; bootz 0x80200000 - 0x80f80000\r\n";
+void tty_write_thread_handle(void *data)
+{
+	int ret, msgid;
+	struct msgstru msgs;
+	while (1) {
+		msgid = msgget(MSGKEY,IPC_EXCL );/*检查消息队列是否存在 */
+		if(msgid < 0){  
+			while (1) {
+				printf("msg %d no find\n",MSGKEY);
+				sleep(1);
+			}
+		}
+		ret = msgrcv(msgid,&msgs,sizeof(struct msgstru),0,0);
+		switch (msgs.msgtype) {
+			case MSG_U_BOOT_CMD:
+				sleep(1);
+				ret = write(serial_fd, bootcmd, strlen(bootcmd));
+				if (ret < strlen(bootcmd)) {
+					printf("command write error:%d\n", ret);
+				}
+				sleep(1);
+				u_boot_cmd = 0;
+				break;
+			case MSG_LOGIN:
+				{
+					char cmd[]="root\n";
+					sleep(1);
+					ret = write(serial_fd, cmd, strlen(cmd));
+					sleep(1);
+					ret = write(serial_fd, cmd, strlen(cmd));
+					sleep(1);
+				}
+				break;
+			case MSG_REBOOT:
+				{
+					char cmd[]="reroot\n";
+					ret = write(serial_fd, cmd, strlen(cmd));
+					sleep(1);
+				}
+				break;
+			default:
+				break;
+		}
+	}
+}
+
 int tty_context_handle(char *buf) {
 	int ret;
 	int len = strlen(buf);
 	int i = 0;
 	char ch[2]="\r\n";
 	int retry = 5;
+	struct msgstru msgs;
 	if (len == 0)
 		return 0;
 
-	//if (strstr(buf, "Hit any key to stop autoboot:")) {
 	if (hook_mode) {
 		if (strstr(buf, "DRAM:")) {
 			while(retry--) {
@@ -117,38 +173,42 @@ int tty_context_handle(char *buf) {
 			}
 			return 1;
 		} else if (strstr(buf, "U-Boot#")) {
-			char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;set netargs setenv bootargs console=ttyO0,115200n8 root=/dev/nfs nfsroot=128.224.162.212:/var/lib/tftpboot/dist,nolock rw ip=dhcp ;tftp 0x80200000  /dist/boot/zImage_wr7dbg;tftp    0x80f80000 /boot_TISDK8/dtb_ti-linux-kernel3.14.y;setenv autoload no;run netargs; bootz 0x80200000 - 0x80f80000";
-			ret = write(serial_fd, bootcmd, strlen(bootcmd));
-			if (ret <= 0) {
-				printf("command write error:%d\n", ret);
-			}
-			//while(retry--) {
-				ret = write(serial_fd,ch,2);
-				if (ret <= 0) {
-					printf("entry write error\n");
+			if (u_boot_cmd == 0 ) {
+				msgs.msgtype = MSG_U_BOOT_CMD;
+				ret = msgsnd(msqid,&msgs,sizeof(struct msgstru),IPC_NOWAIT);  
+				if (ret < 0) {
+					printf("msg send error\n");
 				}
-			//}
-			hook_mode = 0;
+				u_boot_cmd = 1;
+			}
+			//hook_mode = 0;
+		//} else if (strstr(buf, "Wind River Linux 7.0.0.0 128.224.162.191 ttyO0")) {
+		} else if (strstr(buf, "Wind River Linux 7.0.0.0")) {
+				printf("start root\n");
+				msgs.msgtype = MSG_LOGIN;
+				ret = msgsnd(msqid,&msgs,sizeof(struct msgstru),IPC_NOWAIT);  
+				u_boot_cmd = 0;
 		}
 	}
 	return 0;
 }
+
 void input_thread_handle(void* data)
 {
-		printf("input ready\n");
+	printf("input ready\n");
 	while(1) {
 		char ch;
 		ch=getc(stdin);
 		write(serial_fd, &ch, 1);
 	}
-		printf("input over\n");
+	printf("input over\n");
 }
 
 //thread pipe
 void pipe_thread_handle(void* data)
 {
   	char buf[100];/*存储数据*/ 
-		printf("pipe ready\n");
+	printf("pipe ready\n");
 	while(1) {
 		int size;
 		size = read(pipe_fd,buf,100);
@@ -156,8 +216,9 @@ void pipe_thread_handle(void* data)
 		write(serial_fd, buf, size);
 		sleep(1);
 	}
-		printf("pipe over\n");
+	printf("pipe over\n");
 }
+
 void printf_thread_handle(void* data);
 /*get the stdin input string, write into tty*/
 int thread_init(void)
@@ -174,6 +235,10 @@ int thread_init(void)
 		return status;
 
 	status = pthread_create(&id, NULL, (void*)printf_thread_handle , NULL);
+	if (status)
+		return status;
+
+	status = pthread_create(&id, NULL, (void*)tty_write_thread_handle, NULL);
 	if (status)
 		return status;
 	return status;
@@ -226,7 +291,6 @@ void printf_thread_handle(void* data)
 	int line_s = 0;
 	int lines=0, old_lines=0;
 
-	int debug = 0;
 	
 	memset(line_buffer, 0x20, READ_BUFFER_SIZE);
 	while(1) {
@@ -254,7 +318,6 @@ void printf_thread_handle(void* data)
 		}
 
 		pthread_rwlock_unlock(&rwlock);
-		pr_end = 0;
 		for (i=0 ;i<size;i++) {
 			if (pr_buffer[i] == 0) {
 				pr_buffer[i] = 0x20;
@@ -263,13 +326,10 @@ void printf_thread_handle(void* data)
 
 		for (i=0 ;i<size;i++) {
 			if (pr_buffer[i] == '\n') {
-				debug++;
-				if (debug == 3)
-					debug =3;
 				lines++;
 				memcpy(line_buffer+line_s, pr_buffer+pr_end, i - pr_end + 1);
 				line_buffer[line_s+i-pr_end+1] = 0;
-				printf("%s", line_buffer);
+				//printf("%s", line_buffer);
 				if (hook_mode)
 					tty_context_handle(line_buffer);
 				line_s = 0;
@@ -289,12 +349,16 @@ void printf_thread_handle(void* data)
 	}
 }
 
+
 int main(int argc, char * args[])
 {
+	int  epfd;
+	int i;
+									    struct epoll_event epevent;
 	if (serial_input_pipe_init()) {
 		return 1;
 	}
-
+	/*init tty control*/
 	serial_init();
 
 	if (pthread_mutex_init(&mut, NULL) != 0)
@@ -309,6 +373,16 @@ int main(int argc, char * args[])
 		return 1;
 	}
 
+	msqid=msgget(MSGKEY,IPC_EXCL);  /*检查消息队列是否存在*/
+	if(msqid < 0){
+		msqid = msgget(MSGKEY,IPC_CREAT|0666);/*创建消息队列*/
+		if(msqid <0){
+			printf("failed to create msq | errno=%d [%s]\n",errno,strerror(errno));
+			exit(-1);
+		}
+	}
+
+	/*create work thread*/
 	if (thread_init()) {
 		printf("err: init input \n");
 		close(serial_fd);
@@ -316,19 +390,47 @@ int main(int argc, char * args[])
 	}
 	pthread_rwlock_init(&rwlock, NULL);
 
+    epfd = epoll_create(1);
+    if (epfd == -1) {
+        perror("epoll_create");
+        return 7;
+    }
 
-	while(1) {
+    epevent.events = EPOLLIN | EPOLLET;
+    epevent.data.ptr = NULL;
+	epevent.data.fd = serial_fd;
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, serial_fd, &epevent)) {
+        perror("epoll_ctl");
+        return 8;
+    }
+
+    i = 0;
+	while (i < NUM_EVENTS) {
+        uint64_t finished_aio;
+		char test_buf[128] = {0};
 		int size;
+		char line_pr[128] = {0};
+
+        if (epoll_wait(epfd, &epevent, 1, -1) != 1) {
+            perror("epoll_wait");
+            return 9;
+        }
+
 		pthread_rwlock_wrlock(&rwlock);
 		size = read(serial_fd, read_buffer+read_end, READ_BUFFER_SIZE);
-		printf("read_end:%d read:%d\n", read_end, size);
 		if (size) {
+			memcpy(line_pr, read_buffer+read_end, size);
 			read_end +=size;
 			pthread_mutex_lock(&mut);
 			pthread_cond_signal(&cond);
 			pthread_mutex_unlock(&mut);
+			printf("%s",line_pr);
 		}
+		//printf("%s",test_buf);
 		pthread_rwlock_unlock(&rwlock);
 	}
+	close(epfd);
+    close(serial_fd);
 	return 0;
 }
+
