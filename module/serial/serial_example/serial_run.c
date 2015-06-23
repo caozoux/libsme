@@ -12,8 +12,10 @@
 
 
 #include "serialme.h"
-//#define DEVNAME "/dev/ttyUSB0"
-#define DEVNAME "/dev/ttyS0"
+#define DEVNAME "/dev/ttyUSB0"
+//#define DEVNAME "/dev/ttyS0"
+#define ISENTBOOT "cpsw, usb_ether"
+#define ISBOOTCMD "U-Boot#"
 //epoll event number
 #define NUM_EVENTS  128
 
@@ -44,7 +46,7 @@ int serial_init(void)
 	/*以非阻塞方式打开串口*/
 	fd = open(DEVNAME, O_RDWR | O_NOCTTY | O_NDELAY);
 	if (fd < 0) {
-		printf("Open the serial port error!\n");
+		printf("Open the serial port error:%s!\n", DEVNAME);
 		return -1;
 	}
 
@@ -106,7 +108,10 @@ int serial_init(void)
 	return 0;
 }
 
-char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;set netargs setenv bootargs console=ttyO0,115200n8 root=/dev/nfs nfsroot=128.224.162.212:/var/lib/tftpboot/dist,nolock rw ip=dhcp ;tftp 0x80200000  /dist/boot/zImage_wr7dbg;tftp    0x80f80000 /boot_TISDK8/dtb_ti-linux-kernel3.14.y;setenv autoload no;run netargs; bootz 0x80200000 - 0x80f80000\r\n";
+//char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;set netargs setenv bootargs console=ttyO0,115200n8 root=/dev/nfs nfsroot=128.224.162.212:/var/lib/tftpboot/dist,nolock rw ip=dhcp ;tftp 0x80200000  /dist/boot/zImage_wr7dbg;tftp    0x80f80000 /boot_TISDK8/dtb_ti-linux-kernel3.14.y;setenv autoload no;run netargs; bootz 0x80200000 - 0x80f80000\r\n";
+char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;setenv  image_name /maverl/build_zImage;setenv  fdtfile /maverl/armada-xp-gp-linux-3.10.39-2014_T2.0.dtb;setenv rootpath /var/lib/tftpboot/rootfs_marvall_xp/buildroot-2012.11-2014_T3.0-pj4b_armv7_be_sfp;run bootcmd_fdt\r\n";
+//save the arguments string
+char *bootcmd_arg;
 void tty_write_thread_handle(void *data)
 {
 	int ret, msgid;
@@ -125,7 +130,11 @@ void tty_write_thread_handle(void *data)
 		switch (msgs.msgtype) {
 			case MSG_U_BOOT_CMD:
 				sleep(1);
-				ret = write(serial_fd, bootcmd, strlen(bootcmd));
+				if (bootcmd_arg) 
+					ret = write(serial_fd, bootcmd_arg, strlen(bootcmd));
+				else
+					ret = write(serial_fd, bootcmd, strlen(bootcmd));
+
 				if (ret < strlen(bootcmd)) {
 					printf("command write error:%d\n", ret);
 				}
@@ -167,7 +176,7 @@ int tty_context_handle(char *buf) {
 		return 0;
 
 	if (hook_mode) {
-		if (strstr(buf, "DRAM:")) {
+		if (strstr(buf, ISENTBOOT)) {
 			while(retry--) {
 				ret = write(serial_fd,ch,2);
 				if (ret <= 0) {
@@ -175,7 +184,7 @@ int tty_context_handle(char *buf) {
 				}
 			}
 			return 1;
-		} else if (strstr(buf, "U-Boot#")) {
+		} else if (strstr(buf, ISBOOTCMD)) {
 			if (u_boot_cmd == 0 ) {
 				msgs.msgtype = MSG_U_BOOT_CMD;
 				ret = msgsnd(msqid,&msgs,sizeof(struct msgstru),IPC_NOWAIT);  
@@ -357,12 +366,36 @@ int main(int argc, char * args[])
 {
 	int  epfd;
 	int i;
-									    struct epoll_event epevent;
+    struct epoll_event epevent;
+
+
+	//get the arguments
+	bootcmd_arg = NULL;
+	if (argc > 1) {
+		if (!strcmp(args[1], "-boot")) {
+			//bootcmd_arg = malloc(sizeof(args[2]));
+			bootcmd_arg = args[2];
+		} 
+		else {
+			printf("err: no command\n");
+			printf("%s -boot command\n", args[0]);
+			return 1;
+		}
+
+	}
+	else {
+		printf("err: no command\n");
+		printf("%s -boot command\n", args[0]);
+		return 1;
+	}
+
 	if (serial_input_pipe_init()) {
 		return 1;
 	}
 	/*init tty control*/
-	serial_init();
+	if (serial_init()) {
+		return 0;
+	}
 
 	if (pthread_mutex_init(&mut, NULL) != 0)
 	{
