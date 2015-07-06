@@ -3,10 +3,12 @@ TAR_TEST := ttyserial_test
 OBJECTS_TEST = 
 CFLAGS := -g -o2
 LDFLAGS +=-lasound  -lpthread
-INCLUDE += -I. -I../include/
+INCLUDE += -I. -I../include/ -I../../xml/
+LIBS :=../../xml/tinyxml.a
+CC := g++
 
-OBJECTS += $(patsubst %.c, %.o, $(wildcard *.c))
-%.o:%.c
+OBJECTS += $(patsubst %.cpp, %.o, $(wildcard *.cpp))
+%.o:%.cpp
 	$(CC) $(CFLAGS) $(DFLAGS) $(INCLUDE) -c $^ -o $@ 
 $(TARGET):  $(OBJECTS)
 	$(AR) rcs  $@  $^ $(LIBS) 
@@ -15,7 +17,7 @@ $(TARGET):  $(OBJECTS)
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>test module>>>>>>>>>>>>>>>>>>>>>>>
 test: $(TAR_TEST)
 $(TAR_TEST) : $(OBJECTS)   $(OBJECTS_TEST)
-	$(CC) $(OBJECTS) $(OBJECTS_TEST) -o $(TAR_TEST) $(LDFLAGS)
+	$(CC) $(OBJECTS) $(OBJECTS_TEST) $(LIBS) -o $(TAR_TEST) $(LDFLAGS)
 $(OBJECTS_TEST) : $(patsubst %.o, %.c, $(OBJECTS_TEST))
 	$(CC) $(CFLAGS) $(DFLAGS) $(INCLUDE) -c $^ -o $@  
 #<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<test module<<<<<<<<<<<<<<<<<<<<<<<

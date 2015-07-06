@@ -1,21 +1,25 @@
-#include <stdio.h>	/* Standard input/output definitions */
-#include <string.h>	/* String function definitions */
-#include <unistd.h>	/* UNIX standard function definitions */
-#include <fcntl.h>	/* File control definitions */
-#include <errno.h>	/* Error number definitions */
-#include <termios.h>	/* POSIX terminal control definitions */
-#include <pthread.h>
-#include <sys/eventfd.h>
-#include <sys/epoll.h>
-#include <sys/msg.h> 
-#include <sys/ipc.h>
+#include<stdio.h>	/* Standard input/output definitions */
+#include<string.h>	/* String function definitions */
+#include<unistd.h>	/* UNIX standard function definitions */
+#include<fcntl.h>	/* File control definitions */
+#include<errno.h>	/* Error number definitions */
+#include<termios.h>	/* POSIX terminal control definitions */
+#include<pthread.h>
+#include<sys/eventfd.h>
+#include<sys/epoll.h>
+#include<sys/msg.h> 
+#include<sys/ipc.h>
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<getopt.h>
+#include<tinyxml.h>
 
 
 #include "serialme.h"
 #define DEVNAME "/dev/ttyUSB0"
 //#define DEVNAME "/dev/ttyS0"
-#define ISENTBOOT "cpsw, usb_ether"
-#define ISBOOTCMD "U-Boot#"
+#define ISENTBOOT ubootstart
+#define ISBOOTCMD isbootcmd
 //epoll event number
 #define NUM_EVENTS  128
 
@@ -27,6 +31,14 @@ int pipe_fd;
 int hook_mode = 1;
 int msqid;
 
+//uboot的启动命令
+//char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;set netargs setenv bootargs console=ttyO0,115200n8 root=/dev/nfs nfsroot=128.224.162.212:/var/lib/tftpboot/dist,nolock rw ip=dhcp ;tftp 0x80200000  /dist/boot/zImage_wr7dbg;tftp    0x80f80000 /boot_TISDK8/dtb_ti-linux-kernel3.14.y;setenv autoload no;run netargs; bootz 0x80200000 - 0x80f80000\r\n";
+//char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;setenv  image_name /maverl/build_zImage;setenv  fdtfile /maverl/armada-xp-gp-linux-3.10.39-2014_T2.0.dtb;setenv rootpath /var/lib/tftpboot/rootfs_marvall_xp/buildroot-2012.11-2014_T3.0-pj4b_armv7_be_sfp;run bootcmd_fdt\r\n";
+char *bootcmd;
+//serial 是在uboot的console下
+char *isbootcmd;
+//uboot开始启动了
+char *ubootstart;
 
 #define READ_BUFFER_SIZE 256 
 static char read_buffer[READ_BUFFER_SIZE+128] = { 0 };
@@ -108,11 +120,8 @@ int serial_init(void)
 	return 0;
 }
 
-//char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;set netargs setenv bootargs console=ttyO0,115200n8 root=/dev/nfs nfsroot=128.224.162.212:/var/lib/tftpboot/dist,nolock rw ip=dhcp ;tftp 0x80200000  /dist/boot/zImage_wr7dbg;tftp    0x80f80000 /boot_TISDK8/dtb_ti-linux-kernel3.14.y;setenv autoload no;run netargs; bootz 0x80200000 - 0x80f80000\r\n";
-char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;setenv  image_name /maverl/build_zImage;setenv  fdtfile /maverl/armada-xp-gp-linux-3.10.39-2014_T2.0.dtb;setenv rootpath /var/lib/tftpboot/rootfs_marvall_xp/buildroot-2012.11-2014_T3.0-pj4b_armv7_be_sfp;run bootcmd_fdt\r\n";
 //save the arguments string
-char *bootcmd_arg;
-void tty_write_thread_handle(void *data)
+void *tty_write_thread_handle(void *data)
 {
 	int ret, msgid;
 	struct msgstru msgs;
@@ -130,15 +139,14 @@ void tty_write_thread_handle(void *data)
 		switch (msgs.msgtype) {
 			case MSG_U_BOOT_CMD:
 				sleep(1);
-				if (bootcmd_arg) 
-					ret = write(serial_fd, bootcmd_arg, strlen(bootcmd));
-				else
-					ret = write(serial_fd, bootcmd, strlen(bootcmd));
+				ret = write(serial_fd, bootcmd, strlen(bootcmd));
 
 				if (ret < strlen(bootcmd)) {
 					printf("command write error:%d\n", ret);
 				}
 				sleep(1);
+				ret = write(serial_fd, "\r\n", 2);
+				ret = write(serial_fd, "\r\n", 2);
 				u_boot_cmd = 0;
 				break;
 			case MSG_LOGIN:
@@ -169,7 +177,7 @@ int tty_context_handle(char *buf) {
 	int ret;
 	int len = strlen(buf);
 	int i = 0;
-	char ch[2]="\r\n";
+	char ch[]="\r\n";
 	int retry = 5;
 	struct msgstru msgs;
 	if (len == 0)
@@ -205,7 +213,7 @@ int tty_context_handle(char *buf) {
 	return 0;
 }
 
-void input_thread_handle(void* data)
+void * input_thread_handle(void* data)
 {
 	printf("input ready\n");
 	while(1) {
@@ -217,7 +225,7 @@ void input_thread_handle(void* data)
 }
 
 //thread pipe
-void pipe_thread_handle(void* data)
+void *pipe_thread_handle(void* data)
 {
   	char buf[100];/*存储数据*/ 
 	printf("pipe ready\n");
@@ -231,26 +239,26 @@ void pipe_thread_handle(void* data)
 	printf("pipe over\n");
 }
 
-void printf_thread_handle(void* data);
+void *printf_thread_handle(void* data);
 /*get the stdin input string, write into tty*/
 int thread_init(void)
 {
 	int status;
 	unsigned long int id;
 	printf("create thread\n");
-	status = pthread_create(&id, NULL, (void*)input_thread_handle , NULL);
+	status = pthread_create(&id, NULL, input_thread_handle , NULL);
 	if (status)
 		return status;
 
-	status = pthread_create(&id, NULL, (void*)pipe_thread_handle , NULL);
+	status = pthread_create(&id, NULL, pipe_thread_handle , NULL);
 	if (status)
 		return status;
 
-	status = pthread_create(&id, NULL, (void*)printf_thread_handle , NULL);
+	status = pthread_create(&id, NULL, printf_thread_handle , NULL);
 	if (status)
 		return status;
 
-	status = pthread_create(&id, NULL, (void*)tty_write_thread_handle, NULL);
+	status = pthread_create(&id, NULL, tty_write_thread_handle, NULL);
 	if (status)
 		return status;
 	return status;
@@ -297,7 +305,7 @@ void charbuff_dump(char *buf, int len)
 }
 
 //printf handle
-void printf_thread_handle(void* data)
+void *printf_thread_handle(void* data)
 {
 	char line_buffer[READ_BUFFER_SIZE];
 	int line_s = 0;
@@ -361,6 +369,56 @@ void printf_thread_handle(void* data)
 	}
 }
 
+void handle_arguments(char* xmlname)
+{
+	TiXmlDocument doc(xmlname);
+	bool loadOkay = doc.LoadFile();
+	int len;
+
+	if ( !loadOkay )
+	{
+		printf( "Could not load test file 'demotest.xml'. Error='%s'. Exiting.\n", doc.ErrorDesc() );
+		exit( 1 );
+	}
+	TiXmlNode* node = 0;
+	TiXmlNode* item= 0;
+	node = doc.RootElement();
+	assert(node);
+	//printf("root:%s\n", node->Value());
+
+	node = node->FirstChild();
+	printf("version:%s\n", node->Value());
+	while (node = node->NextSibling()) {
+#if 0
+		printf("item:%s ", node->Value());
+		item = node->FirstChild();
+		printf("firstc:%s\n", item->Value());
+#else
+		if (!strcmp("isuboot", node->Value())) {
+			len = strlen(node->Value());
+			item = node->FirstChild();
+			len = strlen(item->Value());
+			isbootcmd = (char *) malloc(len+1);
+			strcpy(isbootcmd,item->Value());
+			printf("isbootcmd: %s\n", isbootcmd);
+		} else if (!strcmp("ubootcmd", node->Value())) {
+			item = node->FirstChild();
+			len = strlen(item->Value());
+			bootcmd = (char *) malloc(len+1);
+			strcpy(bootcmd,item->Value());
+			printf("bootcmd: %s\n", bootcmd);
+		} else if (!strcmp("ubootstart", node->Value())) {
+			item = node->FirstChild();
+			len = strlen(item->Value());
+			ubootstart= (char *) malloc(len+1);
+			strcpy(ubootstart, item->Value());
+			printf("ubootstart: %s\n", bootcmd);
+		} else {
+			printf("item:%s ", node->Value());
+		}
+#endif
+	}
+}
 
 int main(int argc, char * args[])
 {
@@ -368,25 +426,37 @@ int main(int argc, char * args[])
 	int i;
     struct epoll_event epevent;
 
+	int option_index;
+	char c;
+	static const char short_options[] = "hnlLD:qt:c:f:r:d:MNF:A:R:T:B:vV:IPCi";
+	static const struct option long_options[] = {
+		{"help", 0, 0, 'h'},
+		{"bootcmd", 1, 0, 'b'},
+		{"list-devices", 0, 0, 'l'},
+		{"capture", 0, 0, 'C'},
+		{"xmlfile", 1, 0, 'x'},
+		{0, 0, 0, 0}
+	};
 
-	//get the arguments
-	bootcmd_arg = NULL;
-	if (argc > 1) {
-		if (!strcmp(args[1], "-boot")) {
-			//bootcmd_arg = malloc(sizeof(args[2]));
-			bootcmd_arg = args[2];
-		} 
-		else {
-			printf("err: no command\n");
-			printf("%s -boot command\n", args[0]);
-			return 1;
+	while ((c = getopt_long(argc, args, short_options, long_options, &option_index)) != -1) {
+		switch (c) {
+			case 'h':
+				return 0;
+			case 'b':
+				break;
+			//what string is uboot 
+			case 'u':
+				break;
+			//what string is uboot cmd
+			case 'c':
+				break;
+			case 'x':
+				handle_arguments(optarg);
+				break;
+			default:
+				fprintf(stderr, "Try `%s --help' for more information.\n", args[0]);
+				return 1;
 		}
-
-	}
-	else {
-		printf("err: no command\n");
-		printf("%s -boot command\n", args[0]);
-		return 1;
 	}
 
 	if (serial_input_pipe_init()) {
@@ -467,6 +537,10 @@ int main(int argc, char * args[])
 	}
 	close(epfd);
     close(serial_fd);
+	if (bootcmd)
+		free(bootcmd);
+	if (isbootcmd)
+		free(isbootcmd);
 	return 0;
 }
 
