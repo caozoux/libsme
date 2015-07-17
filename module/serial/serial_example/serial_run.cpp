@@ -32,13 +32,15 @@ int hook_mode = 1;
 int msqid;
 
 //uboot的启动命令
-//char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;set netargs setenv bootargs console=ttyO0,115200n8 root=/dev/nfs nfsroot=128.224.162.212:/var/lib/tftpboot/dist,nolock rw ip=dhcp ;tftp 0x80200000  /dist/boot/zImage_wr7dbg;tftp    0x80f80000 /boot_TISDK8/dtb_ti-linux-kernel3.14.y;setenv autoload no;run netargs; bootz 0x80200000 - 0x80f80000\r\n";
-//char bootcmd[]="set serverip 128.224.162.212;set ipaddr 128.224.162.103;setenv  image_name /maverl/build_zImage;setenv  fdtfile /maverl/armada-xp-gp-linux-3.10.39-2014_T2.0.dtb;setenv rootpath /var/lib/tftpboot/rootfs_marvall_xp/buildroot-2012.11-2014_T3.0-pj4b_armv7_be_sfp;run bootcmd_fdt\r\n";
 char *bootcmd;
 //serial 是在uboot的console下
 char *isbootcmd;
 //uboot开始启动了
 char *ubootstart;
+//longin等人开始
+char *loginstart;
+char savelogfile[] = "serLog";
+int savelogfd;
 
 #define READ_BUFFER_SIZE 256 
 static char read_buffer[READ_BUFFER_SIZE+128] = { 0 };
@@ -194,8 +196,10 @@ int tty_context_handle(char *buf) {
 			return 1;
 		} else if (strstr(buf, ISBOOTCMD)) {
 			if (u_boot_cmd == 0 ) {
+
 				msgs.msgtype = MSG_U_BOOT_CMD;
 				ret = msgsnd(msqid,&msgs,sizeof(struct msgstru),IPC_NOWAIT);  
+
 				if (ret < 0) {
 					printf("msg send error\n");
 				}
@@ -203,7 +207,7 @@ int tty_context_handle(char *buf) {
 			}
 			//hook_mode = 0;
 		//} else if (strstr(buf, "Wind River Linux 7.0.0.0 128.224.162.191 ttyO0")) {
-		} else if (strstr(buf, "Wind River Linux 7.0.0.0")) {
+		} else if (strstr(buf, loginstart)) {
 				printf("start root\n");
 				msgs.msgtype = MSG_LOGIN;
 				ret = msgsnd(msqid,&msgs,sizeof(struct msgstru),IPC_NOWAIT);  
@@ -246,10 +250,12 @@ int thread_init(void)
 	int status;
 	unsigned long int id;
 	printf("create thread\n");
+	//用户在console输入命令
 	status = pthread_create(&id, NULL, input_thread_handle , NULL);
 	if (status)
 		return status;
 
+	//其他进程输入到console
 	status = pthread_create(&id, NULL, pipe_thread_handle , NULL);
 	if (status)
 		return status;
@@ -258,6 +264,7 @@ int thread_init(void)
 	if (status)
 		return status;
 
+	//msg方式写入到console中
 	status = pthread_create(&id, NULL, tty_write_thread_handle, NULL);
 	if (status)
 		return status;
@@ -387,6 +394,7 @@ void handle_arguments(char* xmlname)
 	//printf("root:%s\n", node->Value());
 
 	node = node->FirstChild();
+	printf("====================xml=========================\n");
 	printf("version:%s\n", node->Value());
 	while (node = node->NextSibling()) {
 #if 0
@@ -412,12 +420,31 @@ void handle_arguments(char* xmlname)
 			len = strlen(item->Value());
 			ubootstart= (char *) malloc(len+1);
 			strcpy(ubootstart, item->Value());
-			printf("ubootstart: %s\n", bootcmd);
+			printf("ubootstart: %s\n", ubootstart);
+		} else if (!strcmp("login", node->Value())) {
+			item = node->FirstChild();
+			len = strlen(item->Value());
+			loginstart= (char *) malloc(len+1);
+			strcpy(loginstart, item->Value());
+			printf("loginstart: %s\n", loginstart);
 		} else {
 			printf("item:%s ", node->Value());
 		}
 #endif
 	}
+	printf("================================================\n");
+}
+
+int log_init(void) 
+{
+	char *logname;
+	savelogfd = open(savelogfile, O_RDWR | O_APPEND | O_NONBLOCK | O_CREAT);
+	if (savelogfd < 0) {
+		printf("Open the create log file:%s failed!\n", savelogfile);
+		return -1;
+	}
+	printf("log_init\n");
+	return 0;
 }
 
 int main(int argc, char * args[])
@@ -432,9 +459,9 @@ int main(int argc, char * args[])
 	static const struct option long_options[] = {
 		{"help", 0, 0, 'h'},
 		{"bootcmd", 1, 0, 'b'},
-		{"list-devices", 0, 0, 'l'},
 		{"capture", 0, 0, 'C'},
-		{"xmlfile", 1, 0, 'x'},
+		{"xmlfile", 1, 0, 'x'}, //使用xml配置
+		{"log", 0, 0, 'l'}, //开启log保存
 		{0, 0, 0, 0}
 	};
 
@@ -442,7 +469,10 @@ int main(int argc, char * args[])
 		switch (c) {
 			case 'h':
 				return 0;
-			case 'b':
+			case 'l':
+				if (log_init()) {
+					exit(0);
+				}
 				break;
 			//what string is uboot 
 			case 'u':
@@ -527,6 +557,11 @@ int main(int argc, char * args[])
 		if (size) {
 			memcpy(line_pr, read_buffer+read_end, size);
 			read_end +=size;
+			{
+				int savesize=0;
+				savesize = write(savelogfd, line_pr,size);
+				//printf("%d fd:%d savesize:%d \n", size, savelogfd, savesize);
+			}
 			pthread_mutex_lock(&mut);
 			pthread_cond_signal(&cond);
 			pthread_mutex_unlock(&mut);
