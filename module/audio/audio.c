@@ -28,10 +28,10 @@ static snd_pcm_t *handle;
 struct audio_params hwparams, rhwparams;
 
 static const struct fmt_capture {
-void (*start) (int fd, size_t count);
-void (*end) (int fd);
-char *what;
-long long max_filesize;
+	void (*start) (int fd, size_t count);
+	void (*end) (int fd);
+	char *what;
+	long long max_filesize;
 } fmt_rec_table[] = {
 //	{   NULL,       NULL,       N_("raw data"),     LLONG_MAX },
 //	{   begin_voc,  end_voc,    N_("VOC"),      16000000LL },
@@ -89,6 +89,28 @@ static long long pbrec_count = LLONG_MAX, fdcount;
 #define setup_chmap()	0
 #define remap_data(data, count)		(data)
 #define remap_datav(data, count)	(data)
+#if 0
+static void check_stdin(void)
+{
+	unsigned char b;
+
+	if (!interactive)
+		return;
+	if (fd != fileno(stdin)) {
+		while (read(fileno(stdin), &b, 1) == 1) {
+			if (b == ' ' || b == '\r') {
+				while (read(fileno(stdin), &b, 1) == 1);
+				fprintf(stderr, _("\r=== PAUSE ===                                                            "));
+				fflush(stderr);
+			do_pause();
+				fprintf(stderr, "                                                                          \r");
+				fflush(stderr);
+			}
+		}
+	}
+}
+#endif
+
 /*
  * Test, if it is a .VOC file and return >=0 if ok (this is the length of rest)
  *                                       < 0 if not 
@@ -140,6 +162,19 @@ static void done_stdin(void)
     tcsetattr(fileno(stdin), TCSANOW, &term);
 #endif
 }
+
+size_t test_wavefile_read(int fd, u_char *buffer, size_t *size, size_t reqsize, int line)
+{
+	if (*size >= reqsize)
+		return *size;
+	if ((size_t)safe_read(fd, buffer + *size, reqsize - *size) != reqsize - *size) {
+		error(_("read error (called from line %i)"), line);
+		prg_exit(EXIT_FAILURE);
+	}
+	return *size = reqsize;
+}
+
+
 /*
  *  Subroutine to clean up before exit.
  */
@@ -182,6 +217,64 @@ static void header(int rtype, char *name)
 	}
 }
 
+static void do_test_position(void)
+{
+	static long counter = 0;
+	static time_t tmr = -1;
+	time_t now;
+	static float availsum, delaysum, samples;
+	static snd_pcm_sframes_t maxavail, maxdelay;
+	static snd_pcm_sframes_t minavail, mindelay;
+	static snd_pcm_sframes_t badavail = 0, baddelay = 0;
+	snd_pcm_sframes_t outofrange;
+	snd_pcm_sframes_t avail, delay;
+	int err;
+
+	err = snd_pcm_avail_delay(handle, &avail, &delay);
+	if (err < 0)
+		return;
+	outofrange = (test_coef * (snd_pcm_sframes_t)buffer_frames) / 2;
+	if (avail > outofrange || avail < -outofrange ||
+	    delay > outofrange || delay < -outofrange) {
+	  badavail = avail; baddelay = delay;
+	  availsum = delaysum = samples = 0;
+	  maxavail = maxdelay = 0;
+	  minavail = mindelay = buffer_frames * 16;
+	  fprintf(stderr, _("Suspicious buffer position (%li total): "
+	  	"avail = %li, delay = %li, buffer = %li\n"),
+	  	++counter, (long)avail, (long)delay, (long)buffer_frames);
+	} else if (verbose) {
+		time(&now);
+		if (tmr == (time_t) -1) {
+			tmr = now;
+			availsum = delaysum = samples = 0;
+			maxavail = maxdelay = 0;
+			minavail = mindelay = buffer_frames * 16;
+		}
+		if (avail > maxavail)
+			maxavail = avail;
+		if (delay > maxdelay)
+			maxdelay = delay;
+		if (avail < minavail)
+			minavail = avail;
+		if (delay < mindelay)
+			mindelay = delay;
+		availsum += avail;
+		delaysum += delay;
+		samples++;
+		if (avail != 0 && now != tmr) {
+			fprintf(stderr, "BUFPOS: avg%li/%li "
+				"min%li/%li max%li/%li (%li) (%li:%li/%li)\n",
+				(long)(availsum / samples),
+				(long)(delaysum / samples),
+				(long)minavail, (long)mindelay,
+				(long)maxavail, (long)maxdelay,
+				(long)buffer_frames,
+				counter, badavail, baddelay);
+			tmr = now;
+		}
+	}
+}
 /*
  *  write function
  */
@@ -196,8 +289,14 @@ static ssize_t pcm_write(u_char *data, size_t count)
 		count = chunk_size;
 	}
 
-	printf("%s buf:%p size:%d\n", __func__, data, count);
+	data = remap_data(data, count);
+	printf("%s buf:%08x size:%ld\n", __func__, data, (int)count);
 	while (count > 0 && !in_aborting) {
+		if (test_position)
+			do_test_position();
+		//check_stdin();
+		if (test_position)
+			do_test_position();
 		//r = writei_func(handle, data, count);
 		r = snd_pcm_writei(handle, data, count);
 		if (r == -EAGAIN || (r >= 0 && (size_t)r < count)) {
@@ -219,6 +318,7 @@ static ssize_t pcm_write(u_char *data, size_t count)
 			data += r * bits_per_frame / 8;
 		}
 	}
+	printf("zz %s -\n", __func__);
 	return result;
 }
 
@@ -387,7 +487,7 @@ static void set_params(void)
 		error(_("not enough memory"));
 		prg_exit(EXIT_FAILURE);
 	}
-	fprintf(stderr, "real chunk_size = %i\n", chunk_size); 
+	fprintf(stderr, "real chunk_size = %i\n", (int) chunk_size); 
 
 	/* stereo VU-meter isn't always available... */
 	if (vumeter == VUMETER_STEREO) {
@@ -414,6 +514,7 @@ void playback_go(int fd, size_t loaded, long  long count, int rtype, u_char *aud
         written += chunk_bytes;
         loaded -= chunk_bytes;
     }
+
     if (written > 0 && loaded > 0) 
         memmove(audiobuf, audiobuf + written, loaded);
 
@@ -441,9 +542,9 @@ void playback_go(int fd, size_t loaded, long  long count, int rtype, u_char *aud
         r = pcm_write(audiobuf, l);
         if (r != l)
             break;
-        r = r * bits_per_frame / 8; 
+        r = r * bits_per_frame / 8;
         written += r;
-        l = 0; 
+        l = 0;
     }
     snd_pcm_nonblock(handle, 0);
     snd_pcm_drain(handle);
@@ -496,6 +597,202 @@ void pcm_init(void)
 
 }
 
+/*
+ * test, if it's a .WAV file, > 0 if ok (and set the speed, stereo etc.)
+ *                            == 0 if not
+ * Value returned is bytes to be discarded.
+ */
+ssize_t test_wavefile(int fd, u_char *_buffer, size_t size)
+{
+	WaveHeader *h = (WaveHeader *)_buffer;
+	u_char *buffer = NULL;
+	size_t blimit = 0;
+	WaveFmtBody *f;
+	WaveChunkHeader *c;
+	u_int type, len;
+	unsigned short format, channels;
+	int big_endian, native_format;
+
+	printf("%s size:%ld\n", __func__, size);
+	if (size < sizeof(WaveHeader))
+		return -1;
+	if (h->magic == WAV_RIFF)
+		big_endian = 0;
+	else if (h->magic == WAV_RIFX)
+		big_endian = 1;
+	else
+		return -1;
+	if (h->type != WAV_WAVE)
+		return -1;
+
+	if (size > sizeof(WaveHeader)) {
+		check_wavefile_space(buffer, size - sizeof(WaveHeader), blimit);
+		memcpy(buffer, _buffer + sizeof(WaveHeader), size - sizeof(WaveHeader));
+	}
+	size -= sizeof(WaveHeader);
+	while (1) {
+		check_wavefile_space(buffer, sizeof(WaveChunkHeader), blimit);
+		test_wavefile_read(fd, buffer, &size, sizeof(WaveChunkHeader), __LINE__);
+		c = (WaveChunkHeader*)buffer;
+		type = c->type;
+		len = TO_CPU_INT(c->length, big_endian);
+		len += len % 2;
+		if (size > sizeof(WaveChunkHeader))
+			memmove(buffer, buffer + sizeof(WaveChunkHeader), size - sizeof(WaveChunkHeader));
+		size -= sizeof(WaveChunkHeader);
+		if (type == WAV_FMT)
+			break;
+		check_wavefile_space(buffer, len, blimit);
+		test_wavefile_read(fd, buffer, &size, len, __LINE__);
+		if (size > len)
+			memmove(buffer, buffer + len, size - len);
+		size -= len;
+	}
+
+	if (len < sizeof(WaveFmtBody)) {
+		error(_("unknown length of 'fmt ' chunk (read %u, should be %u at least)"),
+		      len, (u_int)sizeof(WaveFmtBody));
+		prg_exit(EXIT_FAILURE);
+	}
+	check_wavefile_space(buffer, len, blimit);
+	test_wavefile_read(fd, buffer, &size, len, __LINE__);
+	f = (WaveFmtBody*) buffer;
+	format = TO_CPU_SHORT(f->format, big_endian);
+	if (format == WAV_FMT_EXTENSIBLE) {
+		WaveFmtExtensibleBody *fe = (WaveFmtExtensibleBody*)buffer;
+		if (len < sizeof(WaveFmtExtensibleBody)) {
+			error(_("unknown length of extensible 'fmt ' chunk (read %u, should be %u at least)"),
+					len, (u_int)sizeof(WaveFmtExtensibleBody));
+			prg_exit(EXIT_FAILURE);
+		}
+		if (memcmp(fe->guid_tag, WAV_GUID_TAG, 14) != 0) {
+			error(_("wrong format tag in extensible 'fmt ' chunk"));
+			prg_exit(EXIT_FAILURE);
+		}
+		format = TO_CPU_SHORT(fe->guid_format, big_endian);
+	}
+	if (format != WAV_FMT_PCM &&
+	    format != WAV_FMT_IEEE_FLOAT) {
+                error(_("can't play WAVE-file format 0x%04x which is not PCM or FLOAT encoded"), format);
+		prg_exit(EXIT_FAILURE);
+	}
+	channels = TO_CPU_SHORT(f->channels, big_endian);
+	if (channels < 1) {
+		error(_("can't play WAVE-files with %d tracks"), channels);
+		prg_exit(EXIT_FAILURE);
+	}
+	hwparams.channels = channels;
+	printf("WaveFmtBody format:%d,channels:%d,bit_p_spl:%d,byte_p_sec:%d,byte_p_spl:%d, channels:%d,format:%d,sample_fq:%d\n"
+			,f->format, f->channels, f->bit_p_spl, f->byte_p_sec, f->byte_p_spl,
+			f->channels,f->format,f->sample_fq);
+	switch (TO_CPU_SHORT(f->bit_p_spl, big_endian)) {
+	case 8:
+		if (hwparams.format != DEFAULT_FORMAT &&
+		    hwparams.format != SND_PCM_FORMAT_U8)
+			fprintf(stderr, _("Warning: format is changed to U8\n"));
+		hwparams.format = SND_PCM_FORMAT_U8;
+		break;
+	case 16:
+		if (big_endian)
+			native_format = SND_PCM_FORMAT_S16_BE;
+		else
+			native_format = SND_PCM_FORMAT_S16_LE;
+		if (hwparams.format != DEFAULT_FORMAT &&
+		    hwparams.format != native_format)
+			fprintf(stderr, _("Warning: format is changed to %s\n"),
+				snd_pcm_format_name(native_format));
+		hwparams.format = native_format;
+		break;
+	case 24:
+		switch (TO_CPU_SHORT(f->byte_p_spl, big_endian) / hwparams.channels) {
+		case 3:
+			if (big_endian)
+				native_format = SND_PCM_FORMAT_S24_3BE;
+			else
+				native_format = SND_PCM_FORMAT_S24_3LE;
+			if (hwparams.format != DEFAULT_FORMAT &&
+			    hwparams.format != native_format)
+				fprintf(stderr, _("Warning: format is changed to %s\n"),
+					snd_pcm_format_name(native_format));
+			hwparams.format = native_format;
+			break;
+		case 4:
+			if (big_endian)
+				native_format = SND_PCM_FORMAT_S24_BE;
+			else
+				native_format = SND_PCM_FORMAT_S24_LE;
+			if (hwparams.format != DEFAULT_FORMAT &&
+			    hwparams.format != native_format)
+				fprintf(stderr, _("Warning: format is changed to %s\n"),
+					snd_pcm_format_name(native_format));
+			hwparams.format = native_format;
+			break;
+		default:
+			error(_(" can't play WAVE-files with sample %d bits in %d bytes wide (%d channels)"),
+			      TO_CPU_SHORT(f->bit_p_spl, big_endian),
+			      TO_CPU_SHORT(f->byte_p_spl, big_endian),
+			      hwparams.channels);
+			prg_exit(EXIT_FAILURE);
+		}
+		break;
+	case 32:
+		if (format == WAV_FMT_PCM) {
+			if (big_endian)
+				native_format = SND_PCM_FORMAT_S32_BE;
+			else
+				native_format = SND_PCM_FORMAT_S32_LE;
+                        hwparams.format = native_format;
+		} else if (format == WAV_FMT_IEEE_FLOAT) {
+			if (big_endian)
+				native_format = SND_PCM_FORMAT_FLOAT_BE;
+			else
+				native_format = SND_PCM_FORMAT_FLOAT_LE;
+			hwparams.format = native_format;
+		}
+		break;
+	default:
+		error(_(" can't play WAVE-files with sample %d bits wide"),
+		      TO_CPU_SHORT(f->bit_p_spl, big_endian));
+		prg_exit(EXIT_FAILURE);
+	}
+	hwparams.rate = TO_CPU_INT(f->sample_fq, big_endian);
+	
+	if (size > len)
+		memmove(buffer, buffer + len, size - len);
+	size -= len;
+	
+	while (1) {
+		u_int type, len;
+
+		check_wavefile_space(buffer, sizeof(WaveChunkHeader), blimit);
+		test_wavefile_read(fd, buffer, &size, sizeof(WaveChunkHeader), __LINE__);
+		c = (WaveChunkHeader*)buffer;
+		type = c->type;
+		len = TO_CPU_INT(c->length, big_endian);
+		if (size > sizeof(WaveChunkHeader))
+			memmove(buffer, buffer + sizeof(WaveChunkHeader), size - sizeof(WaveChunkHeader));
+		size -= sizeof(WaveChunkHeader);
+		if (type == WAV_DATA) {
+			printf("data len:%d\n", c->length);
+			if (len < pbrec_count && len < 0x7ffffffe)
+				pbrec_count = len;
+			if (size > 0)
+				memcpy(_buffer, buffer, size);
+			free(buffer);
+			return size;
+		}
+		len += len % 2;
+		check_wavefile_space(buffer, len, blimit);
+		test_wavefile_read(fd, buffer, &size, len, __LINE__);
+		if (size > len)
+			memmove(buffer, buffer + len, size - len);
+		size -= len;
+	}
+
+	/* shouldn't be reached */
+	return -1;
+}
+
 void playback(char *name)
 {
 	int fd = -1;
@@ -505,8 +802,7 @@ void playback(char *name)
 
 	pcm_init();
 
-	audiobuf = (u_char *)malloc(1024);
-	printf("%p \n", audiobuf);
+	audiobuf = (u_char *)malloc(1024*10);
 	if (audiobuf == NULL) {
 		error(_("not enough memory"));
 		return;
@@ -530,11 +826,11 @@ void playback(char *name)
 		prg_exit(EXIT_FAILURE);;
 	}
 
-	if ((dtawave = test_wavefile(fd, audiobuf, dta,&hwparams)) >= 0) {
+	if ((dtawave = test_wavefile(fd, audiobuf, dta)) >= 0) {
 	 	//pbrec_count = calc_count();
 
 		pbrec_count = 137090;
 		playback_go(fd, dta, pbrec_count, FORMAT_WAVE, audiobuf, name);
 	}
-		
+
 }

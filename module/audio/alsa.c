@@ -1,4 +1,5 @@
 #include <alsa/asoundlib.h>
+#include "audio.h"
 /*information as follow:
 ALSA library version: 1.0.27.2
 
@@ -117,83 +118,32 @@ int alas_info(void)
 }
 
 
-int alam_hw_info(void)
+int alam_info_dump(snd_pcm_t *dev_handle, snd_pcm_hw_params_t *params)
 {
 	int rc;
 	snd_pcm_t *handle;
-	snd_pcm_hw_params_t *params;
 	unsigned int val, val2;
 	int dir;
 	snd_pcm_uframes_t frames;
 
-	/* Open PCM device for playback. */
-	rc = snd_pcm_open(&handle, "default",
-			                    SND_PCM_STREAM_PLAYBACK, 0);
-	if (rc < 0) {
-		    fprintf(stderr,
-					            "unable to open pcm device: %s\n",
-								            snd_strerror(rc));
-			    exit(1);
-	}
-
-	/* Allocate a hardware parameters object. */
-	snd_pcm_hw_params_alloca(&params);
-
-	/* Fill it in with default values. */
-	snd_pcm_hw_params_any(handle, params);
-
-	/* Set the desired hardware parameters. */
-
-	/* Interleaved mode */
-	snd_pcm_hw_params_set_access(handle, params,
-			                      SND_PCM_ACCESS_RW_INTERLEAVED);
-
-	/* Signed 16-bit little-endian format */
-	snd_pcm_hw_params_set_format(handle, params,
-			                              SND_PCM_FORMAT_S16_LE);
-
-	/* Two channels (stereo) */
-	snd_pcm_hw_params_set_channels(handle, params, 2);
-
-	/* 44100 bits/second sampling rate (CD quality) */
-	val = 44100;
-	snd_pcm_hw_params_set_rate_near(handle,
-			                                 params, &val, &dir);
-
-	/* Write the parameters to the driver */
-	rc = snd_pcm_hw_params(handle, params);
-	if (rc < 0) {
-		    fprintf(stderr,
-					            "unable to set hw parameters: %s\n",
-								            snd_strerror(rc));
-			    exit(1);
-	}
+	handle = dev_handle;
 
 	/* Display information about the PCM interface */
 
-	printf("PCM handle name = '%s'\n",
-			         snd_pcm_name(handle));
+	printf("PCM handle name = '%s'\n", snd_pcm_name(handle));
 
-	printf("PCM state = %s\n",
-			         snd_pcm_state_name(snd_pcm_state(handle)));
+	printf("PCM state = %s\n", snd_pcm_state_name(snd_pcm_state(handle)));
 
-	snd_pcm_hw_params_get_access(params,
-			                          (snd_pcm_access_t *) &val);
-	printf("access type = %s\n",
-			         snd_pcm_access_name((snd_pcm_access_t)val));
+	snd_pcm_hw_params_get_access(params, (snd_pcm_access_t *) &val);
+	printf("access type = %s\n", snd_pcm_access_name((snd_pcm_access_t)val));
 
 	snd_pcm_hw_params_get_format(params,(snd_pcm_format_t *) &val);
-	printf("format = '%s' (%s)\n",
-			    snd_pcm_format_name((snd_pcm_format_t)val),
-				    snd_pcm_format_description(
-						                             (snd_pcm_format_t)val));
+	printf("format = '%s' (%s)\n", snd_pcm_format_name((snd_pcm_format_t)val),
+				    snd_pcm_format_description((snd_pcm_format_t)val));
 
-	snd_pcm_hw_params_get_subformat(params,
-			                        (snd_pcm_subformat_t *)&val);
-	printf("subformat = '%s' (%s)\n",
-			    snd_pcm_subformat_name((snd_pcm_subformat_t)val),
-				    snd_pcm_subformat_description(
-						                          (snd_pcm_subformat_t)val));
+	snd_pcm_hw_params_get_subformat(params, (snd_pcm_subformat_t *)&val);
+	printf("subformat = '%s' (%s)\n", snd_pcm_subformat_name((snd_pcm_subformat_t)val),
+				    snd_pcm_subformat_description((snd_pcm_subformat_t)val));
 
 	snd_pcm_hw_params_get_channels(params, &val);
 	printf("channels = %d\n", val);
@@ -213,15 +163,13 @@ int alam_hw_info(void)
 			                                    &val, &dir);
 	printf("buffer time = %d us\n", val);
 
-	snd_pcm_hw_params_get_buffer_size(params,
-			                         (snd_pcm_uframes_t *) &val);
+	snd_pcm_hw_params_get_buffer_size(params, (snd_pcm_uframes_t *) &val);
 	printf("buffer size = %d frames\n", val);
 
 	snd_pcm_hw_params_get_periods(params, &val, &dir);
 	printf("periods per buffer = %d frames\n", val);
 
-	snd_pcm_hw_params_get_rate_numden(params,
-			                                    &val, &val2);
+	snd_pcm_hw_params_get_rate_numden(params, &val, &val2);
 	printf("exact rate = %d/%d bps\n", val, val2);
 
 	val = snd_pcm_hw_params_get_sbits(params);
@@ -260,7 +208,6 @@ int alam_hw_info(void)
 	val = snd_pcm_hw_params_can_sync_start(params);
 	printf("can sync start = %d\n", val);
 
-	snd_pcm_close(handle);
 	return 0;
 }
 
@@ -339,28 +286,24 @@ int alas_stdin_play(void)
   loops = 5000000 / val;
 
   while (loops > 0) {
-    loops--;
-    rc = read(0, buffer, size);
-    if (rc == 0) {
-      fprintf(stderr, "end of file on input\n");
-      break;
-    } else if (rc != size) {
-      fprintf(stderr,
-              "short read: read %d bytes\n", rc);
-    }
-    rc = snd_pcm_writei(handle, buffer, frames);
-    if (rc == -EPIPE) {
-      /* EPIPE means underrun */
-      fprintf(stderr, "underrun occurred\n");
-      snd_pcm_prepare(handle);
-    } else if (rc < 0) {
-      fprintf(stderr,
-              "error from writei: %s\n",
-              snd_strerror(rc));
-    }  else if (rc != (int)frames) {
-      fprintf(stderr,
-              "short write, write %d frames\n", rc);
-    }
+		loops--;
+		rc = read(0, buffer, size);
+		if (rc == 0) {
+			fprintf(stderr, "end of file on input\n");
+			break;
+		} else if (rc != size) {
+			fprintf(stderr, "short read: read %d bytes\n", rc);
+		}
+		rc = snd_pcm_writei(handle, buffer, frames);
+		if (rc == -EPIPE) {
+			/* EPIPE means underrun */
+			fprintf(stderr, "underrun occurred\n");
+			snd_pcm_prepare(handle);
+		} else if (rc < 0) {
+			fprintf(stderr, "error from writei: %s\n", snd_strerror(rc));
+		}  else if (rc != (int)frames) {
+			fprintf(stderr, "short write, write %d frames\n", rc);
+		}
   }
 
   snd_pcm_drain(handle);

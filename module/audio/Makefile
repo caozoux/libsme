@@ -1,7 +1,7 @@
 TARGET := audio.a
 TAR_TEST := audio_test
 OBJECTS_TEST = test/audio_test.o
-CFLAGS := -g -o2
+CFLAGS := -g -o0
 LDFLAGS +=-lasound 
 INCLUDE += -I. -I../include/
 
