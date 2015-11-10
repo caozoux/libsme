@@ -4,6 +4,7 @@
 #include <fcntl.h>  
 #include <linux/input.h> 
 #include <unistd.h>
+#include "keys.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -41,11 +42,25 @@ value：
 */ 
 
 
-#define EVENT_NAME ("/dev/input/event2")
+#define EVENT_NAME ("/dev/input/event7")
+const char* show_key_name(struct input_event *ev_key)
+{
+	int i = 0;
+	while (ubuntu_key[i].name != NULL) {
+		//printf("%s \n", ubuntu_key[i].name);
+		if (ev_key->code == ubuntu_key[i].keycode) {
+			return ubuntu_key[i].name;
+		}
+		i++;
+	}
+	return NULL;
+}
+
 int main(void)  
 {  
     struct input_event ev_temp;  
     int fd = open(EVENT_NAME, O_RDWR);  
+	char *key_name;
     if(fd < 0) {  
         printf("open device failed.\n");  
         return 0;  
@@ -60,11 +75,15 @@ int main(void)
         count = read(fd, &ev_temp, sizeof(struct input_event));
 		if(count)
 		{
-			if(ev_temp.type == EV_SYN)
+			if(ev_temp.type == EV_SYN || ev_temp.type == EV_MSC)
 				continue;
 
-			printf("key:%d ", ev_temp.code);
-			printf("%s\n", ev_temp.value?down:up);
+
+			//fprintf(stderr, "%d %d\n", ev_temp.type, ev_temp.code);
+			key_name = (char*) show_key_name(&ev_temp);	
+			if (key_name)
+				fprintf(stderr, "%s ", key_name);
+			fprintf(stderr, "%s\n", ev_temp.value?down:up);
 			continue;
 		}
     }

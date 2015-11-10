@@ -1,11 +1,11 @@
 #ifndef __MEKEYS_H__
 #define __MEKEYS_H__
 struct MEKey_data {
-char *name[4];
+char *name;
 int keycode;
 };
 
-struct MEKey_data ubuntu_key = 
+struct MEKey_data ubuntu_key[] = 
 	{{"ESC",4},
 	 {"F1",59},
 	 {"F2",60},
@@ -84,5 +84,5 @@ struct MEKey_data ubuntu_key =
 	 {"DOWN",108},
 	 {"RIHT",106},
 	 {"prts",99},
-	 {}};
+	 {NULL, 0}};
  #endif
