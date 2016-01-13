@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!DOCTYPE PLAY SYSTEM "play.dtd">
+<context>
+<isuboot> u-boot</isuboot>
+<ubootcmd> U-Boot 2014 </ubootcmd>
+<ubootstart> U-Boot 2014 </ubootstart>
+<login> U-Boot 2014 </login>
+</context>
+
