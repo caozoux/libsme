@@ -395,8 +395,7 @@ void handle_arguments(char* xmlname)
 
 	node = node->FirstChild();
 	printf("====================xml=========================\n");
-	printf("version:%s\n", node->Value());
-	while (node = node->NextSibling()) {
+	do {
 #if 0
 		printf("item:%s ", node->Value());
 		item = node->FirstChild();
@@ -426,16 +425,16 @@ void handle_arguments(char* xmlname)
 			len = strlen(item->Value());
 			loginstart= (char *) malloc(len+1);
 			strcpy(loginstart, item->Value());
-			printf("loginstart: %s\n", loginstart);
+			printf("login: %s\n", loginstart);
 		} else {
 			printf("item:%s ", node->Value());
 		}
 #endif
-	}
+	} while(node = node->NextSibling());
 	printf("================================================\n");
 }
 
-int log_init(void) 
+int log_init(void)
 {
 	char *logname;
 	savelogfd = open(savelogfile, O_RDWR | O_APPEND | O_NONBLOCK | O_CREAT);
