@@ -13,6 +13,7 @@
 #include "base64.h"
 #include "sha1.h"
 #include "intLib.h"
+#include "testdata.h"
 
 #define _LDBGD(fmt, ...) do {printf(fmt,## __VA_ARGS__);} while(0)
 #define _LDBGW(fmt, ...) do {printf(fmt,## __VA_ARGS__);} while(0)
@@ -20,13 +21,14 @@
 #define _LDBGF(fmt, ...) do {printf(fmt,## __VA_ARGS__);} while(0)
 
 
-#define REQUEST_LEN_MAX 1024
+#define REQUEST_LEN_MAX 1024*4
 #define DEFEULT_SERVER_PORT 8000
 #define WEB_SOCKET_KEY_LEN_MAX 256
 #define RESPONSE_HEADER_LEN_MAX 1024
 #define LINE_MAX 256
 struct websocket_connect_d {
 	int websock_fd;
+	int connected;
 };
 void shakeHand(int connfd,const char *serverKey);
 char * fetchSecKey(const char * buf);
@@ -240,6 +242,8 @@ char *  packData(const char * message,unsigned long * len)
             }
   
 
+	 printf("%s\n", message);
+	 printf("len %d\n", *len);
         return data;
 }
 
@@ -269,28 +273,152 @@ void response(int connfd,const char * message)
   printf("%s write:%d\n", __func__, i);
 }
 
-#if 0
-int init_remote_socket_data(char *addr, int poart)
+struct request_type_data {
+	int req;
+	int size;
+	unsigned char data[300];
+};
+#if 1
+unsigned char senior_buf[1028];
+unsigned char jump;
+unsigned short int sleep_x, sleep_y, sleep_z, sleep_cnt;
+unsigned short int *heart, temperate;
+int walk;
+
+void handle_data(unsigned char *buf)
+{
+	int i;
+	printf("00: ");
+	for (i=1; i < 216;i++) {
+		if ((i-1)%10 == 0)
+			printf("\n%02d: ", i);
+		printf("%02x ",buf[i-1]);
+	}
+	printf("\n");
+	heart = (unsigned short int*) buf;
+
+	sleep_x=*(unsigned short int*)(buf+200);
+	sleep_y=*(unsigned short int*)(buf+202);
+	sleep_z=*(unsigned short int*)(buf+204);
+	temperate = *(unsigned short int*)(buf+206);
+	jump = *(buf+208);
+	sleep_cnt= *(unsigned short int*)(buf+209); 
+	walk= *(int *)(buf+211); 
+	printf(" sleep_x/y/z:%04x %04x %04x, temperate:%04x, jump:%02x, sleep_cnt:%02x walk:%02x\n",
+			sleep_x, sleep_y, sleep_z, temperate, jump, sleep_cnt, walk);
+	
+}
+struct remote_data{
+	int socket_id;
+} remote_d;
+
+void* get_data(void* arg)
+{
+	struct remote_data *remote_p;
+	int ret;
+	remote_p = (struct remote_data *) arg;
+	while (1) {
+		ret = recv(remote_p->socket_id, senior_buf, 1024, 0);
+		if (ret > 0) {
+			printf("get data %d\n", ret);
+			handle_data(senior_buf+5);
+		}
+	}
+}
+
+int init_remote_socket_data(char *addr, int port)
 {
 	struct sockaddr_in server_addr;
-	int socket_id;
+	int socket_id, ret;
+	struct request_type_data *data;
+	pthread_t pthread_id;
 	bzero(&server_addr,sizeof(server_addr)); //把一段内存区的内容全部设置为0
 	server_addr.sin_family = AF_INET;
-	server_addr.sin_addr.s_addr = htons(addr);
+	server_addr.sin_addr.s_addr = inet_addr(addr);
 	server_addr.sin_port = htons(port);
 	socket_id = socket(PF_INET,SOCK_STREAM,0);
+	printf("start connect %s port %d \n", addr, port);
 	if (socket_id <0 )
-		return false;
+		return -1;
 
 	if (connect(socket_id, (const struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
-		printf("connect error, exit");
 		return -1;
 	}
+	remote_d.socket_id = socket_id;
+	pthread_create(&pthread_id, NULL,&get_data,(void *)&remote_d);
+#if 0
+	while (1) {
+		ret = recv(socket_id, senior_buf, 1024, 0);
+		if (ret > 0) {
+			printf("get data %d\n", ret);
+			data = (struct request_type_data*) senior_buf;
+			handle_data(senior_buf+5);
+		}
+	}
+#endif
 
+	printf("connect successfully \n");
 	return socket_id;
 }
 #endif
 	
+unsigned char *handle_buf;
+unsigned char heart_test_data[] = {50,60,70,80,90,80,70,60,55,50};
+int heart_test_data_off =0;
+
+unsigned char *create_heart_data(void) 
+{
+	char *buf;
+	char pri_buf[1000];
+	int i, len = 0;
+
+	buf =(char *) malloc(1000*4);
+	memset(buf, 50, 4000);
+	srand(time(0));
+	for (i = 0; i <4000; i = i+30) {
+		buf[i] = heart_test_data[0] + rand()%10+1;
+		buf[i+1] = heart_test_data[1] + rand()%10+1;
+		buf[i+2] = heart_test_data[2] + rand()%10+1;
+		buf[i+3] = heart_test_data[3] + rand()%10+1;
+		buf[i+4] = heart_test_data[4] + rand()%10+1;
+		buf[i+5] = heart_test_data[5] + rand()%10+1;
+		buf[i+6] = heart_test_data[6] + rand()%10+1;
+		buf[i+7] = heart_test_data[7] + rand()%10+1;
+		buf[i+8] = heart_test_data[8] + rand()%10+1;
+		buf[i+9] = heart_test_data[9] + rand()%10+1;
+		//memcpy(buf+i, heart_test_data, 10);
+	}
+	handle_buf = (unsigned char *)buf;
+#if 0
+	//while (1) {
+		for (i=0; i < 100; i++) {
+				len += sprintf(pri_buf+len,"%02d",handle_buf[i+heart_test_data_off]);
+		}
+		heart_test_data_off +=5;
+		if (heart_test_data_off >=3900)
+			heart_test_data_off = 0;
+		for (i=0; i< len; i=i+2) {
+			printf("%c%c ", pri_buf[i], pri_buf[i+1]);
+		}
+		len = 0;
+	//	printf("\n");
+	//	sleep(1);
+	//}
+#endif
+}
+void test_data(void)
+{
+	char *buf;
+	int i;
+
+	buf =(char *) malloc(1000*4);
+	memset(buf, 50, 4000);
+	for (i = 0; i <4000; i = i+30) {
+		memcpy(buf+i, heart_test_data, 10);
+	}
+	exit(0);
+}
+
 int main(int argc, char *argv[])
 {
 	struct sockaddr_in servaddr, cliaddr;
@@ -305,10 +433,10 @@ int main(int argc, char *argv[])
 	int port= DEFEULT_SERVER_PORT;
 	pthread_t pthread_id;
 	struct websocket_connect_d * web_d;
-
+//create_heart_data();
 #if 0
-	if ((data_control_fd =init_remote_socket_data("128.224.163.167", 9001))<0) {
-		_LDBGE("connet data control failed\n");
+	if ((data_control_fd = init_remote_socket_data("128.224.163.14", 9001))<0) {
+		printf("connect data centr failed\n");
 		return 1;
 	}
 #endif
@@ -334,85 +462,94 @@ int main(int argc, char *argv[])
 
 	listen(listenfd, 20);
 
-	printf("Listen %d Accepting connections ... \n",port);
-	cliaddr_len = sizeof(cliaddr);
-	connfd = accept(listenfd, (struct sockaddr *)&cliaddr, &cliaddr_len);
-	printf("From %s at PORT %d\n",
-		       inet_ntop(AF_INET, &cliaddr.sin_addr, str, sizeof(str)),
-		       ntohs(cliaddr.sin_port));
-
-#if 0
-	while (1)
-	{
+	while (1) {
+		printf("Listen %d Accepting connections ... \n",port);
+		cliaddr_len = sizeof(cliaddr);
+		connfd = accept(listenfd, (struct sockaddr *)&cliaddr, &cliaddr_len);
+		printf("From %s at PORT %d\n",
+				   inet_ntop(AF_INET, &cliaddr.sin_addr, str, sizeof(str)),
+				   ntohs(cliaddr.sin_port));
+		web_d = new websocket_connect_d;
 		memset(buf,0,REQUEST_LEN_MAX);
+
 		n = read(connfd, buf, REQUEST_LEN_MAX);	
 		printf("---------------------");
-	
-		if(0==connected)
+
+
+		if(0==web_d->connected)
 		{
-		    printf("read:%d%s",n,buf);
-		    secWebSocketKey=computeAcceptKey(buf);	
-		    shakeHand(connfd,secWebSocketKey);
-		    connected=1;
-			pthread_create(&pthread_id, NULL,&accepted_func,NULL);
-		    continue;
+			printf("read:%d%s",n,buf);
+			secWebSocketKey=computeAcceptKey(buf);	
+			shakeHand(connfd,secWebSocketKey);
+			web_d->connected=1;
+			web_d->websock_fd = connfd;
+			pthread_create(&pthread_id, NULL,&accepted_func,(void *)web_d);
+			//pthread_join(pthread_id, NULL);
+			//delete web_d;
 		}
-
-		data=analyData(buf,n);
-		response(connfd,data);
 	}
-#else
-	memset(buf,0,REQUEST_LEN_MAX);
-	n = read(connfd, buf, REQUEST_LEN_MAX);	
-	printf("---------------------");
-
-	if(0==connected)
-	{
-		printf("read:%d%s",n,buf);
-		secWebSocketKey=computeAcceptKey(buf);	
-		shakeHand(connfd,secWebSocketKey);
-		connected=1;
-		web_d = new websocket_connect_d;
-		web_d->websock_fd = connfd;
-		pthread_create(&pthread_id, NULL,&accepted_func,(void *)web_d);
-		pthread_join(pthread_id, NULL);
-		delete web_d;
-	}
-#endif
-	close(connfd);
 }
 
 static int test_cnt=1;
 //子线程函数
 void* accepted_func(void* arg)
 {
-	int n, connfd;
-	char buf[REQUEST_LEN_MAX];
+	int n, connfd, len = 0;
+	char buf[REQUEST_LEN_MAX], data_buf[256];
 	char *data;
 	struct websocket_connect_d *web_d;
+	short int *heart_var1, *heart_var2, *heart_var3, heart_imple = 50, i;
 	web_d = (struct websocket_connect_d *) arg;
 	connfd = web_d->websock_fd;
 	_LDBGD("start websocket handle...............\n");
+	handle_buf = create_heart_data();
 	while (1) {
 	//while (n = read(connfd, buf, REQUEST_LEN_MAX)) {
 		n = read(connfd, buf, REQUEST_LEN_MAX);
+		if (n < 0) {
+			printf("clinet connet fialed, exit\n");
+			break;
+		}
+			
 		data=analyData(buf,n);
-		/*data[0]= 's';
-		data[1]= 'e';
-		data[2]= 'n';
-		data[3]= 'd';*/
 #if 1
-		sprintf(data,"%d",test_cnt);
+		//memcpy(data_buf, handle_buf, 216);
+		//memcpy(data_buf, &data_heart[test_cnt], 216);
+		len += sprintf(buf,"%04d,%04d,%04d,%04d,%04d \n",(temperate>>8),walk,walk, sleep_cnt,sleep_cnt);
+#if 0
+		for (i=0; i < 100; i++) {
+			heart_var1 = (short int *)data_buf+i*2;
+			heart_var2 = (short int *)data_buf+i*2+2;
+			heart_var3 = (short int *)data_buf+i*2+4;
+			if ((heart_var2 - heart_var1) + (heart_var3 -heart_var2) > 700) {
+				len += sprintf(buf +len,"%02d",heart_imple +1);
+				heart_imple += 1;
+			}
+			else if ((heart_var2 - heart_var1) + (heart_var3 -heart_var2) < -700) {
+				len += sprintf(buf +len,"%02d",heart_imple -1);
+				heart_imple -= 1;
+			} else {
+				len += sprintf(buf +len,"%02d",heart_imple);
+			}
+		}
 #else
-		data[0]= test_cnt;
-		data[1]= test_cnt+1;
-		data[2]= test_cnt+2;
-		data[3]= test_cnt+3;
-		data[4]= test_cnt+4;
+		for (i=0; i < 100; i++) {
+				len += sprintf(buf +len,"%02d",handle_buf[i+heart_test_data_off]);
+		}
+		heart_test_data_off +=5;
+		if (heart_test_data_off >=3900)
+			heart_test_data_off = 0;
 #endif
-		data[5]= 0;
-     	printf("send:%s\n",data);
+#else
+		//sprintf(buf,"%04d,%04d,%04d,%04d,%04d \n",temperate,walk,walk, sleep_cnt,sleep_cnt);
+		len += sprintf(buf,"%04d,%04d,%04d,%04d,%04d \n",12,13,14, 15,16);
+		for (i=0; i < 100; i++) {
+		   len += sprintf(buf+len,"%02d",i);	
+		}
+#endif
 		test_cnt++;
-		response(connfd,data);
+		response(connfd,buf);
+		len = 0;
 	}
+	close(connfd);
 }

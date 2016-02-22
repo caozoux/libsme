@@ -14,7 +14,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 */
-#define HELLO_WORLD_SERVER_PORT    6666 
+#define HELLO_WORLD_SERVER_PORT   9001 
 #define LENGTH_OF_LISTEN_QUEUE 20
 #define BUFFER_SIZE 1024
 #define FILE_NAME_MAX_SIZE 512
